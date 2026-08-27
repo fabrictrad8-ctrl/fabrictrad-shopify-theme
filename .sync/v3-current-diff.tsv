@@ -14,7 +14,6 @@ CHANGED	config/settings_schema.json	c26f6811f6b66d6c6974be72c9ae5b5a	f2460553fdc
 MISSING	sections/fabrictrad-admin-order-resolution.liquid	9caafc75dec6e3903cb841513ee6c2fe	-	10380	-
 MISSING	sections/fabrictrad-admin-partial-refund.liquid	31293cb0c4a7f0e740679d571f6f70c6	-	10511	-
 MISSING	sections/fabrictrad-admin-portal.liquid	86abec08ae4bcabb29fcad40ae47905f	-	21653	-
-CHANGED	sections/fabrictrad-auth-router.liquid	c5e527717d3a3a158685a8cdfb891192	0b55eede4b523b0c1d865d5b824bd23b	9688	10737
 MISSING	sections/fabrictrad-buyer-cart.liquid	c970c463de6706dd118d6d8d140edacc	-	8097	-
 MISSING	sections/fabrictrad-buyer-commerce-chrome.liquid	d6b2b64f283dd0a73e1f7c1d6d98c15b	-	8426	-
 MISSING	sections/fabrictrad-buyer-workspace.liquid	ec406c48cc10846c87681af7067caf49	-	38848	-
