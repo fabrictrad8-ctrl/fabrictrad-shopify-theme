@@ -1,0 +1,39 @@
+name: Apply newline-only Shopify parity
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-newline-parity.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply exact newline-only differences
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          for raw in open('.sync/newline-only-diff.tsv', encoding='utf-8'):
+              raw=raw.rstrip('\n')
+              if not raw: continue
+              path, pre_s, post_s = raw.split('\t')
+              pre=int(pre_s.split('=',1)[1])
+              post=int(post_s.split('=',1)[1])
+              data=open(path,'rb').read()
+              with open(path,'wb') as f:
+                  f.write((b'\n'*pre)+data+(b'\n'*post))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets blocks config layout locales sections snippets templates
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Match Shopify newline normalization"
+          git push origin HEAD:main
