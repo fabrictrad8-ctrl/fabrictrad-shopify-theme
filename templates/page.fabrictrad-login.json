@@ -10,8 +10,7 @@
 {
   "sections": {
     "auth": {"type": "fabrictrad-auth-router", "settings": {}},
-    "routing": {"type": "fabrictrad-login-capability-route", "settings": {}},
     "main": {"type": "fabrictrad-login", "settings": {}}
   },
-  "order": ["auth", "routing", "main"]
+  "order": ["auth", "main"]
 }
