@@ -1,0 +1,7 @@
+<script>
+(function(){
+ function fix(){document.querySelectorAll('.ft-home a[href="/account"]').forEach(a=>a.setAttribute('href','/pages/buyer-dashboard'))}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fix,{once:true});else fix();
+})();
+</script>
+{% schema %}{"name":"FabricTrad route fixes","tag":"section","class":"fabrictrad-route-fixes","settings":[],"presets":[{"name":"FabricTrad route fixes"}]}{% endschema %}

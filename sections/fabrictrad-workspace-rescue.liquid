@@ -1,0 +1,38 @@
+<div id="ft-workspace-rescue-marker" hidden></div>
+<script>
+(function(){
+  if(window.__FT_WORKSPACE_RESCUE_V3__)return;
+  window.__FT_WORKSPACE_RESCUE_V3__=true;
+  const path=location.pathname;
+  const scope=path.includes('/pages/seller-portal')?'seller':path.includes('/pages/buyer-dashboard')?'buyer':null;
+  if(!scope)return;
+  const cfg=scope==='seller'?{loader:'fts-loading',workspaceId:'fts-workspace',workspaceSelector:'[data-ft-seller-workspace]'}:{loader:'ftb-loading',workspaceId:'ftb-workspace',workspaceSelector:'[data-ft-buyer-workspace]'};
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  function withTimeout(p,ms,message){return Promise.race([Promise.resolve(p),new Promise((_,reject)=>setTimeout(()=>reject(new Error(message)),ms))]);}
+  async function waitForAuth(){for(let i=0;i<160;i++){if(window.FabricTradAuth)return window.FabricTradAuth;await sleep(50);}throw new Error('FabricTrad account guard did not start.');}
+  function workspaceNode(){return document.getElementById(cfg.workspaceId)||document.querySelector(cfg.workspaceSelector);}
+  async function waitForWorkspace(ms=9000){const start=Date.now();while(Date.now()-start<ms){const n=workspaceNode();if(n)return n;await sleep(60);}return null;}
+  function stabilize(){const loader=document.getElementById(cfg.loader),workspace=workspaceNode();if(loader)loader.hidden=true;if(workspace){workspace.hidden=false;workspace.removeAttribute('aria-hidden');}document.body?.classList.add('ft-workspace-authorized');return workspace;}
+  async function reveal(){await waitForWorkspace();const workspace=stabilize();let ticks=0;const timer=setInterval(()=>{ticks++;stabilize();if(ticks>=60)clearInterval(timer)},250);return workspace;}
+  function notice(message){const host=workspaceNode()||document.querySelector('main')||document.body;if(!host)return;let n=document.getElementById('ft-workspace-rescue-notice');if(!n){n=document.createElement('div');n.id='ft-workspace-rescue-notice';n.style.cssText='margin:12px auto;max-width:1180px;padding:12px 14px;border:1px solid #fed7aa;border-radius:12px;background:#fff7ed;color:#9a3412;font:600 13px/1.5 system-ui,sans-serif';host.prepend(n);}n.textContent=message;}
+  function fail(err){const loader=document.getElementById(cfg.loader);if(!loader)return;loader.innerHTML='<div style="max-width:520px;padding:28px;text-align:center"><strong style="display:block;color:#991b1b;margin-bottom:8px">Workspace could not finish loading.</strong><span style="color:#667085;font-size:13px">'+String(err?.message||'Please refresh and try again.')+'</span><br><button type="button" onclick="location.reload()" style="margin-top:14px;padding:10px 14px;border:1px solid #d0d5dd;border-radius:9px;background:#fff;cursor:pointer">Retry</button></div>';}
+  async function run(){
+    const auth=await waitForAuth();
+    const profile=await withTimeout(auth.guard(scope),11000,'Account verification timed out.');
+    if(!profile)return;
+    if(scope==='seller'&&profile.can_sell!==true){
+      if(new URLSearchParams(location.search).get('onboarding')==='1'){
+        document.body?.classList.add('ft-seller-onboarding-mode');
+        const loader=document.getElementById(cfg.loader);if(loader)loader.hidden=true;
+      }
+      return;
+    }
+    await reveal();
+    if(scope==='seller'){
+      try{const session=await auth.getSession();const sb=await auth.getClient();const q=await withTimeout(sb.from('seller_profiles').select('user_id,is_active,verification_status').eq('user_id',session?.user?.id||'').maybeSingle(),6000,'Seller profile check timed out.');if(q.error)throw q.error;if(!q.data)notice('Seller access is enabled, but the seller store profile is missing. Contact FabricTrad support.');else if(q.data.is_active!==true)notice('This seller profile is not active. Seller operations are restricted until the profile is active.');}catch(err){console.warn('FabricTrad seller profile check skipped',err);notice('Seller workspace opened, but one profile check could not complete.');}
+    }
+  }
+  run().catch(err=>{console.error('FabricTrad workspace rescue failed',err);fail(err);});
+})();
+</script>
+{% schema %}{"name":"Workspace rescue","tag":"section","class":"fabrictrad-workspace-rescue","settings":[],"presets":[{"name":"Workspace rescue"}]}{% endschema %}

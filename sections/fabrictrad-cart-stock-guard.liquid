@@ -1,0 +1,19 @@
+<script type="application/json" id="ft-cart-stock-data">[
+{% for item in cart.items %}{"line":{{ forloop.index }},"max":{{ item.variant.inventory_quantity | default: 0 }},"policy":"{{ item.variant.inventory_policy }}","managed":{% if item.variant.inventory_management %}true{% else %}false{% endif %},"vendor":{{ item.vendor | default: item.product.vendor | default: 'FabricTrad seller' | json }}}{% unless forloop.last %},{% endunless %}{% endfor %}
+]</script>
+<style>.ftcart__vendor-group{padding:10px 15px;border-bottom:1px solid #e2e8f0;background:#fff8f2;color:#7c2d12;font-size:10px;font-weight:900;letter-spacing:.02em}.ftcart__stocknote{margin-top:5px;color:#15803d;font-size:9px;font-weight:750}</style>
+<script>
+(function(){
+  async function change(line,quantity){const r=await fetch('/cart/change.js',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({line,quantity})});const p=await r.json().catch(()=>({}));if(!r.ok)throw new Error(p.description||p.message||'Cart update failed');location.reload()}
+  function init(){
+    const data=document.getElementById('ft-cart-stock-data');if(!data)return;let rows=[];try{rows=JSON.parse(data.textContent||'[]')}catch{}
+    const items=rows.map(row=>({row,node:document.querySelector(`[data-line="${row.line}"]`)})).filter(x=>x.node);
+    items.forEach(({row,node})=>{const q=node.querySelector('[data-qty]');if(!q)return;const hard=row.managed&&String(row.policy).toLowerCase()==='deny',max=Math.max(0,Number(row.max||0));if(hard)q.max=String(max);q.min='0';const note=document.createElement('div');note.className='ftcart__stocknote';note.textContent=hard?`${max.toLocaleString('en-IN')} currently in stock`:'Availability checked at checkout';q.closest('.ftcart__tools')?.insertAdjacentElement('beforebegin',note);q.onchange=()=>{let n=Math.max(0,Number(q.value||0));if(hard&&n>max){n=max;q.value=String(max);alert(`Only ${max} unit${max===1?'':'s'} are currently in stock.`)}change(row.line,n).catch(e=>alert(e.message))}});
+    const sellers=[...new Set(rows.map(r=>r.vendor).filter(Boolean))];
+    const host=document.querySelector('.ftcart__items');if(host&&sellers.length){const bar=host.querySelector('.ftcart__bar');sellers.forEach(vendor=>{const heading=document.createElement('div');heading.className='ftcart__vendor-group';heading.textContent=sellers.length>1?`Seller: ${vendor} · ships separately`:`Sold by ${vendor}`;host.appendChild(heading);items.filter(x=>x.row.vendor===vendor).forEach(x=>host.appendChild(x.node))});if(bar)host.insertBefore(bar,host.firstChild)}
+    const multi=document.querySelector('.ftcart__multi');if(multi&&sellers.length>1)multi.textContent=`This is a ${sellers.length}-seller cart. You complete one Shopify checkout; FabricTrad creates separate seller fulfilment records so each seller ships only their own products.`;
+  }
+  document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init):init();
+})();
+</script>
+{% schema %}{"name":"Cart stock guard","tag":"section","class":"fabrictrad-cart-stock-guard","settings":[],"presets":[{"name":"Cart stock guard"}]}{% endschema %}

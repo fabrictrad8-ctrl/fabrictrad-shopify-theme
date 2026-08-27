@@ -1,0 +1,28 @@
+<script type="application/json" id="ft-product-stock-data">[
+{% for variant in product.variants %}{"id":"{{ variant.id }}","qty":{{ variant.inventory_quantity | default: 0 }},"policy":"{{ variant.inventory_policy }}","managed":{% if variant.inventory_management %}true{% else %}false{% endif %}}{% unless forloop.last %},{% endunless %}{% endfor %}
+]</script>
+<script>
+(function(){
+  function init(){
+    const select=document.getElementById('ftp-variant-select'),qty=document.querySelector('#ftp-product-form .ftp__qty'),stock=document.getElementById('ftp-stock'),add=document.getElementById('ftp-add'),form=document.getElementById('ftp-product-form'),data=document.getElementById('ft-product-stock-data');
+    if(!select||!qty||!data)return;
+    let rows=[];try{rows=JSON.parse(data.textContent||'[]')}catch{}
+    const map=new Map(rows.map(x=>[String(x.id),x]));
+    function sync(){
+      const row=map.get(String(select.value));if(!row)return;
+      const hard=row.managed&&String(row.policy).toLowerCase()==='deny',max=Math.max(0,Number(row.qty||0));
+      if(hard){qty.max=String(max);if(Number(qty.value)>max)qty.value=String(max||1)}else qty.removeAttribute('max');
+      qty.min='1';
+      const canBuy=!hard||max>0;
+      if(stock)stock.textContent=hard?(max>0?`${max.toLocaleString('en-IN')} in stock · ready to buy`:'Sold out'):'Available to add to cart';
+      if(add)add.disabled=!canBuy;
+    }
+    select.addEventListener('change',sync);
+    qty.addEventListener('input',()=>{const max=Number(qty.max||0);if(qty.max&&Number(qty.value)>max)qty.value=String(max);if(Number(qty.value)<1)qty.value='1'});
+    if(form)form.addEventListener('submit',e=>{const row=map.get(String(select.value));if(!row)return;const max=Math.max(0,Number(row.qty||0));if(row.managed&&String(row.policy).toLowerCase()==='deny'&&Number(qty.value)>max){e.preventDefault();qty.value=String(max);alert(`Only ${max} unit${max===1?'':'s'} are currently in stock.`)}});
+    sync();
+  }
+  document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init):init();
+})();
+</script>
+{% schema %}{"name":"Product stock guard","tag":"section","class":"fabrictrad-product-stock-guard","settings":[],"presets":[{"name":"Product stock guard"}]}{% endschema %}

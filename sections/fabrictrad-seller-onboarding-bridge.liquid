@@ -1,0 +1,45 @@
+<div class="ft-seller-onboarding-bridge" hidden aria-hidden="true"></div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const URL='https://rdhfwlzhcvwjhkxhhpoo.supabase.co';
+  const KEY='sb_publishable_Un2-RQfjGbIiXF3Mb2oGIA_p-Z1kMls';
+  let client;
+  function wait(){ if(!window.supabase||!window.supabase.createClient){setTimeout(wait,80);return;} client=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}); document.addEventListener('submit',handle,true); }
+  function msg(text,type='info'){const n=document.getElementById('ftsp-alert');if(!n)return;n.textContent=text;n.dataset.type=type;n.hidden=!text;}
+  const clean=v=>String(v??'').trim();
+  async function handle(e){
+    const form=e.target;
+    if(!form)return;
+    if(form.id==='ftsp-application-form'){
+      e.preventDefault();e.stopImmediatePropagation();
+      const {data:{session}}=await client.auth.getSession();
+      if(!session){msg('Sign in before submitting a seller application.','error');return;}
+      const fd=new FormData(form),phone=clean(fd.get('phone'));
+      msg('Preparing your seller account…');
+      const {error:profileError}=await client.rpc('ensure_current_account_profile',{p_requested_role:'buyer'});
+      if(profileError){msg(profileError.message,'error');return;}
+      const {error:phoneError}=await client.rpc('set_current_account_phone',{p_phone:phone});
+      if(phoneError){msg(phoneError.message,'error');return;}
+      const payload={ownerName:clean(fd.get('owner_name')),businessName:clean(fd.get('business_name')),businessType:clean(fd.get('business_type')),gstin:clean(fd.get('gstin')).toUpperCase(),pan:clean(fd.get('pan')).toUpperCase(),address:clean(fd.get('address')),city:clean(fd.get('city')),state:clean(fd.get('state')),pincode:clean(fd.get('pincode')),categories:clean(fd.get('categories')).split(',').map(x=>x.trim()).filter(Boolean),monthlyCapacity:clean(fd.get('monthly_capacity'))};
+      const {error}=await client.rpc('request_seller_access',{p_payload:payload});
+      if(error){msg(error.message,'error');return;}
+      msg('Seller application created. Loading your verification workspace…','success');setTimeout(()=>location.reload(),450);return;
+    }
+    if(form.id==='ftsp-product-form'){
+      e.preventDefault();e.stopImmediatePropagation();
+      const {data:{session}}=await client.auth.getSession();if(!session){msg('Sign in before submitting a listing.','error');return;}
+      const {data:seller,error:sellerError}=await client.from('seller_profiles').select('id').eq('user_id',session.user.id).maybeSingle();
+      if(sellerError||!seller){msg(sellerError?.message||'Seller profile not found.','error');return;}
+      const fd=new FormData(form);const payload={seller_id:seller.id,name:clean(fd.get('name')),sku:clean(fd.get('sku')),category:clean(fd.get('category'))||'Other',description:clean(fd.get('description')),price_per_unit:Number(fd.get('price_per_unit')),unit:clean(fd.get('unit'))||'mtr',available_quantity:Number(fd.get('available_quantity')||0),moq:Number(fd.get('moq')||3),gst_rate:Number(fd.get('gst_rate')||5),status:'draft',source:'manual'};
+      msg('Submitting listing for FabricTrad review…');
+      const {data:created,error:createError}=await client.from('seller_products').insert(payload).select('id').single();
+      if(createError){msg(createError.message,'error');return;}
+      const {error:submitError}=await client.rpc('submit_my_seller_product_for_review',{p_product_id:created.id});
+      if(submitError){msg(submitError.message,'error');return;}
+      msg('Listing submitted for approval. It will publish to Shopify only after FabricTrad approval.','success');setTimeout(()=>location.reload(),500);
+    }
+  }
+  wait();
+});
+</script>
+{% schema %}{"name":"Seller onboarding bridge","tag":"section","class":"seller-onboarding-bridge","settings":[],"presets":[{"name":"Seller onboarding bridge"}]}{% endschema %}

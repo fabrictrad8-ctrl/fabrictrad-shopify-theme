@@ -1,0 +1,20 @@
+<div data-ft-checkout-binding hidden></div>
+<script>
+(function(){
+ function delay(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+ async function init(){
+  const checkout=document.querySelector('.ftcart__checkout');if(!checkout||checkout.dataset.bindingReady)return;checkout.dataset.bindingReady='1';
+  const href=checkout.getAttribute('href')||'/checkout';let pending=true;
+  const prepare=(async()=>{try{
+    if(!window.FabricTradAuth)return;
+    const sb=await window.FabricTradAuth.getClient();const sessionResult=await sb.auth.getSession();const session=sessionResult?.data?.session;if(!session)return;
+    const profile=await window.FabricTradAuth.getProfile(true);if(!profile||profile.can_buy!==true)return;
+    const r=await fetch('https://rdhfwlzhcvwjhkxhhpoo.supabase.co/functions/v1/fabrictrad-checkout-token',{method:'POST',headers:{Authorization:`Bearer ${session.access_token}`,apikey:'sb_publishable_Un2-RQfjGbIiXF3Mb2oGIA_p-Z1kMls','Content-Type':'application/json'},body:'{}'});const p=await r.json().catch(()=>({}));if(!r.ok||!p.token)throw new Error(p.error||'Buyer order binding was unavailable');
+    const cart=await fetch('/cart/update.js',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({attributes:{_fabrictrad_buyer_token:p.token,_fabrictrad_purchase_model:'direct_shopify_checkout'}})});if(!cart.ok)throw new Error('Shopify cart binding was unavailable');checkout.dataset.buyerBound='true';
+  }catch(e){console.warn('FabricTrad buyer binding skipped; Shopify checkout remains available.',e)}finally{pending=false}})();
+  checkout.addEventListener('click',async e=>{if(!pending)return;e.preventDefault();await Promise.race([prepare,delay(1200)]);location.assign(href)});
+ }
+ document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init,{once:true}):init();
+})();
+</script>
+{% schema %}{"name":"Checkout buyer binding","tag":"section","class":"fabrictrad-checkout-binding","settings":[],"presets":[{"name":"Checkout buyer binding"}]}{% endschema %}

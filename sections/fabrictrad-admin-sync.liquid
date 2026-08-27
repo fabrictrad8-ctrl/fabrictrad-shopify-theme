@@ -1,0 +1,11 @@
+<div class="fta-sync-bridge" hidden aria-hidden="true"></div>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+  const URL='https://rdhfwlzhcvwjhkxhhpoo.supabase.co',KEY='sb_publishable_Un2-RQfjGbIiXF3Mb2oGIA_p-Z1kMls';let sb;
+  function wait(){if(!window.supabase||!window.supabase.createClient){setTimeout(wait,80);return;}sb=window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});mount();}
+  function message(t,type='info'){const n=document.getElementById('fta-message');if(!n)return;n.textContent=t;n.dataset.type=type;n.hidden=!t;}
+  function mount(){const actions=document.querySelector('.fta__top>div:last-child');if(!actions||document.getElementById('fta-shopify-sync')){setTimeout(mount,150);return;}const b=document.createElement('button');b.id='fta-shopify-sync';b.type='button';b.textContent='Sync Shopify orders';actions.prepend(b);b.addEventListener('click',async()=>{b.disabled=true;message('Syncing recent Shopify orders into seller operations…');const {data,error}=await sb.functions.invoke('shopify-order-sync',{body:{since_days:30}});b.disabled=false;if(error||data?.error){message(data?.error||error.message,'error');return;}message(`Shopify sync complete: ${data.shopify_orders_seen||0} orders checked, ${data.seller_orders_synced||0} seller order records updated${data.unmapped_lines?`, ${data.unmapped_lines} unmapped lines flagged`:''}.`,'success');document.getElementById('fta-refresh')?.click();});}
+  wait();
+});
+</script>
+{% schema %}{"name":"Admin Shopify sync","tag":"section","class":"fabrictrad-admin-sync","settings":[],"presets":[{"name":"Admin Shopify sync"}]}{% endschema %}
