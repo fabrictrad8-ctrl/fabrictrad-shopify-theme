@@ -19,7 +19,6 @@ MISSING	sections/fabrictrad-buyer-commerce-chrome.liquid	d6b2b64f283dd0a73e1f7c1
 MISSING	sections/fabrictrad-buyer-workspace.liquid	ec406c48cc10846c87681af7067caf49	-	38848	-
 MISSING	sections/fabrictrad-direct-commerce-fixes.liquid	dd4ca8058fbd4027a9a092fd7d9770fc	-	2983	-
 MISSING	sections/fabrictrad-home.liquid	7a7b3850ebebec6543ca8232510ed9a3	-	8873	-
-CHANGED	sections/fabrictrad-login.liquid	30458a04783614488a90d4f46e2457cc	0f86111502eb86d7ffcd229b4c06d7c8	18495	19069
 MISSING	sections/fabrictrad-product-detail.liquid	53f12855ee312eb3873f0392f3ab8854	-	11244	-
 MISSING	sections/fabrictrad-seller-access-onboarding.liquid	d3e153763ce4526719a5798dee112ce3	-	7521	-
 MISSING	sections/fabrictrad-seller-documents.liquid	4d6251fe1392da14fe53b26561a016bb	-	11541	-
@@ -29,6 +28,7 @@ MISSING	sections/fabrictrad-seller-workspace.liquid	d3653d2058695b50b21e048cede5
 MISSING	sections/fabrictrad-virtual-drape.liquid	c6a5cbe2517ea67160d2a98d27d8dd18	-	7232	-
 CHANGED	sections/footer-group.json	89219d57567f6585e3f160871f90ed1c	3c287ec43123092ed2b839af223942fb	3860	7848
 CHANGED	sections/header-group.json	57f978403ffcd498236466aa1dfb24b2	8fde7ca85c2d03f6db1c6232c32eb589	2389	3295
+CHANGED	sections/product-hotspots.liquid	da74e51f268421858bd2a12c9f99faad	da74e51f268421858bd2a12c9f99a826	19573	19573
 CHANGED	snippets/cart-products.liquid	dfaa07b52dcbf5e050fa121c6d2845c3	18928442a4b0be70c99a309e48042e1a	31623	31622
 CHANGED	snippets/grid-density-controls.liquid	5463c82d0080942988a48e14f687f939	8ed948bddc33a8c1b23821a07452beaf	5735	4688
 CHANGED	snippets/stylesheets.liquid	a8a822bd563bb43cde4dda649189afea	225482ed969debae3891c08113a254be	184	126
@@ -42,8 +42,8 @@ CHANGED	templates/index.json	c54708d2255c0cec3c1ad1362b88897b	d096e1b604c1107f70
 CHANGED	templates/list-collections.json	c4de05458cb4e725ab24f1911a00b948	de7af3a80eafecc450b3c0a2ec17f39d	5571	5566
 CHANGED	templates/page.contact.json	f88c7b7186bb52ff56210c2a5d08066a	6e5f1d62af8777cf4704f92b5c435af1	4426	4336
 MISSING	templates/page.fabrictrad-admin.json	f99ceecbbcac15ac5eb5a6070cdbf376	-	430	-
-CHANGED	templates/page.fabrictrad-login.json	1fe23e7096dd8481e62315a8c901e4c5	abdaa5df1803452e8fe1ea582a161390	262	537
+CHANGED	templates/page.fabrictrad-login.json	5e82da36dc1652f64fb52767da46de05	abdaa5df1803452e8fe1ea582a161390	174	537
 CHANGED	templates/page.json	eb9984ce584bd0df3a0af0a16abd22fd	4490e1b11e3117a1b5c7a7e01e1ab6e4	1687	1647
-CHANGED	templates/password.json	13a0d16e133abfd30b4b0a467ffab769	80b17074b9089a1bc4a01b4cc85897c1	4508	4235
+CHANGED	templates/password.json	13a0d16e1336df30b4b0a467ffab769	80b17074b9089a1bc4a01b4cc85897c1	4508	4235
 CHANGED	templates/product.json	8613ad45ebc1d0d84b32ca102a683e08	d40dc0dd078d2b36012dc403c91bcc0f	303	14063
 CHANGED	templates/search.json	08a8eceaab19e487282dd80e30e4518f	e896f8a70b66bd5ff3d25608af382aa5	5711	5630
