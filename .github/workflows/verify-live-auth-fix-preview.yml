@@ -29,7 +29,7 @@ jobs:
             curl --fail --silent --show-error --location \
               --connect-timeout 10 --max-time 40 \
               --cookie "$cookie" --cookie-jar "$cookie" \
-              -A 'Mozilla/5.0 FabricTradPreviewVerifier/3.0' \
+              -A 'Mozilla/5.0 FabricTradPreviewVerifier/3.1' \
               "https://www.fabrictrad.com${path}${join}preview_theme_id=${THEME_ID}&pb=0&ft_verify=${GITHUB_RUN_ID}" \
               -o "$out"
           }
@@ -51,7 +51,7 @@ jobs:
           ! grep -q 'separate identity and separate workspace' /tmp/login.html
           ! grep -q 'Sign in as Buyer' /tmp/login.html
 
-      - name: Verify original registration route model
+      - name: Verify register chooser
         shell: bash
         run: |
           set -euo pipefail
@@ -59,11 +59,24 @@ jobs:
           grep -q '/pages/buyer-registration?type=end_user' /tmp/register.html
           grep -q '/pages/buyer-registration?type=retail_store' /tmp/register.html
           grep -q '/pages/seller-registration' /tmp/register.html
-          grep -q 'Personal Buyer account' /tmp/buyer-reg.html
+
+      - name: Verify Buyer registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'Create your Personal Buyer account' /tmp/buyer-reg.html
           grep -q 'Retail store' /tmp/buyer-reg.html
+          grep -q 'set_current_account_phone' /tmp/buyer-reg.html
+          grep -q "p_requested_role:'buyer'" /tmp/buyer-reg.html
+
+      - name: Verify Seller registration
+        shell: bash
+        run: |
+          set -euo pipefail
           grep -q 'same FabricTrad identity' /tmp/seller-reg.html
           grep -q 'request_seller_access' /tmp/seller-reg.html
           grep -q 'set_current_account_phone' /tmp/seller-reg.html
+          grep -q 'Seller application status' /tmp/seller-reg.html
 
       - name: Verify Buyer workspace isolation
         shell: bash
@@ -90,4 +103,4 @@ jobs:
         run: |
           set -euo pipefail
           grep -qi 'cdn.shopify.com' /tmp/buyer.html
-          echo 'PASS: Shopify candidate follows the original FabricTrad route/account model: generic login, separate registration routes, same underlying identity, isolated Buyer/Seller workspaces, and Seller Registration outside Seller Dashboard.'
+          echo 'PASS: Shopify candidate follows the original FabricTrad route/account model.'
