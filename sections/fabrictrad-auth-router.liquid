@@ -26,98 +26,300 @@ html.ft-entry-mode predictive-search{display:none!important}
 html.ft-entry-mode #MainContent{margin:0!important;padding:0!important;max-width:none!important}
 </style>
 {% else %}
-<style>html.ft-auth-pending body{visibility:hidden!important}</style>
+<style id="ft-auth-cloak">html.ft-auth-pending body{visibility:hidden!important}</style>
 {% endif %}
+
 <script>
 (function(){
-  const VERSION='2026-08-private-gate-v8-strict-capabilities';
+  const VERSION='2026-08-28-auth-v10-stable';
   if(window.FabricTradAuth?.version===VERSION)return;
+
   const SCOPE={{ ft_scope | json }};
+  const URL='https://rdhfwlzhcvwjhkxhhpoo.supabase.co';
+  const KEY='sb_publishable_Un2-RQfjGbIiXF3Mb2oGIA_p-Z1kMls';
+  const SDK_SOURCES=[
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0',
+    'https://unpkg.com/@supabase/supabase-js@2.110.0'
+  ];
+  const PATHS={
+    login:'/pages/login',
+    buyer:'/collections/fabrictrad-catalogue',
+    buyerDashboard:'/pages/buyer-dashboard',
+    seller:'/pages/seller-portal',
+    admin:'/pages/fabrictrad-admin'
+  };
+
   if(SCOPE==='landing'||SCOPE==='login')document.documentElement.classList.add('ft-entry-mode');
   else document.documentElement.classList.add('ft-auth-pending');
 
-  const URL='https://rdhfwlzhcvwjhkxhhpoo.supabase.co';
-  const KEY='sb_publishable_Un2-RQfjGbIiXF3Mb2oGIA_p-Z1kMls';
-  const SDK_SOURCES=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0/dist/umd/supabase.min.js','https://unpkg.com/@supabase/supabase-js@2.110.0/dist/umd/supabase.min.js'];
-  const PATHS={login:'/pages/login',buyer:'/collections/fabrictrad-catalogue',buyerDashboard:'/pages/buyer-dashboard',seller:'/pages/seller-portal',admin:'/pages/fabrictrad-admin'};
-  let clientPromise=null,profilePromise=null;
+  let clientPromise=null;
+  let profilePromise=null;
+  const guardPromises=new Map();
 
-  function withTimeout(p,ms,message){return Promise.race([Promise.resolve(p),new Promise((_,reject)=>setTimeout(()=>reject(new Error(message)),ms))]);}
-  function timedFetch(input,init={}){const controller=new AbortController(),upstream=init?.signal;if(upstream){if(upstream.aborted)controller.abort();else upstream.addEventListener('abort',()=>controller.abort(),{once:true});}const timer=setTimeout(()=>controller.abort(),10000);return fetch(input,{...init,signal:controller.signal}).finally(()=>clearTimeout(timer));}
-  function safeNext(){const v=location.pathname+location.search;return v.startsWith('/')&&!v.startsWith('//')?v:'/';}
-  function roleHint(scope){return scope==='seller'?'seller':scope==='admin'?'admin':'buyer';}
-  function loginUrl(scope='buyer',status=''){const q=new URLSearchParams({role:roleHint(scope),next:safeNext()});if(status)q.set('status',status);return PATHS.login+'?'+q.toString();}
-  function release(){document.documentElement.classList.remove('ft-auth-pending');}
-  function sellerOnboardingRequested(){return new URLSearchParams(location.search).get('onboarding')==='1';}
-
-  async function load(){
-    if(window.supabase?.createClient)return;
-    if(window.__ftSupaLoader)return window.__ftSupaLoader;
-    window.__ftSupaLoader=(async()=>{let lastError=null;for(const src of SDK_SOURCES){try{await withTimeout(new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.async=true;s.crossOrigin='anonymous';s.onload=()=>window.supabase?.createClient?resolve():reject(new Error('Supabase library loaded without createClient.'));s.onerror=()=>reject(new Error('Unable to load '+src));document.head.appendChild(s);}),6000,'Sign-in library source timed out.');if(window.supabase?.createClient)return;}catch(err){lastError=err;console.warn('FabricTrad auth source failed',src,err);}}throw lastError||new Error('Unable to load FabricTrad sign-in library.');})();
-    return window.__ftSupaLoader;
+  function withTimeout(promise,ms,message){
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error(message)),ms))
+    ]);
   }
-  async function getClient(){if(!clientPromise)clientPromise=load().then(()=>window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},global:{fetch:timedFetch}}));return clientPromise;}
-  async function getSession(){const sb=await getClient();const r=await withTimeout(sb.auth.getSession(),7000,'Session lookup timed out.');if(r?.error)throw r.error;return r?.data?.session||null;}
+  function safeNext(){
+    const value=location.pathname+location.search;
+    return value.startsWith('/')&&!value.startsWith('//')?value:'/';
+  }
+  function roleHint(scope){
+    return scope==='seller'?'seller':scope==='admin'?'admin':'buyer';
+  }
+  function loginUrl(scope='buyer',status=''){
+    const q=new URLSearchParams({role:roleHint(scope),next:safeNext()});
+    if(status)q.set('status',status);
+    return PATHS.login+'?'+q.toString();
+  }
+  function release(){
+    document.documentElement.classList.remove('ft-auth-pending');
+    const cloak=document.getElementById('ft-auth-cloak');
+    if(cloak)cloak.remove();
+    document.documentElement.style.visibility='';
+  }
+  function sellerOnboardingRequested(){
+    return new URLSearchParams(location.search).get('onboarding')==='1';
+  }
+
+  async function loadLibrary(){
+    if(window.supabase?.createClient)return;
+    if(window.__fabrictradSupabaseLoader)return window.__fabrictradSupabaseLoader;
+    window.__fabrictradSupabaseLoader=(async()=>{
+      let lastError=null;
+      for(const src of SDK_SOURCES){
+        try{
+          await withTimeout(new Promise((resolve,reject)=>{
+            const script=document.createElement('script');
+            script.src=src;
+            script.async=true;
+            script.crossOrigin='anonymous';
+            script.onload=()=>window.supabase?.createClient
+              ?resolve()
+              :reject(new Error('Supabase library loaded without createClient.'));
+            script.onerror=()=>reject(new Error('Unable to load secure sign-in library.'));
+            document.head.appendChild(script);
+          }),7000,'Secure sign-in library timed out.');
+          if(window.supabase?.createClient)return;
+        }catch(error){
+          lastError=error;
+          console.warn('FabricTrad auth source failed',src,error);
+        }
+      }
+      throw lastError||new Error('Unable to load FabricTrad sign-in.');
+    })();
+    return window.__fabrictradSupabaseLoader;
+  }
+
+  async function getClient(){
+    if(!clientPromise){
+      clientPromise=loadLibrary().then(()=>window.supabase.createClient(URL,KEY,{
+        auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
+      }));
+    }
+    return clientPromise;
+  }
+
+  async function getSession(){
+    const sb=await getClient();
+    const result=await withTimeout(sb.auth.getSession(),8000,'Session lookup timed out.');
+    if(result?.error)throw result.error;
+    return result?.data?.session||null;
+  }
+
   async function getProfile(force=false){
-    if(force)profilePromise=null;if(profilePromise)return profilePromise;
-    profilePromise=(async()=>{const session=await getSession();if(!session)return null;const sb=await getClient();const fields='id,email,full_name,phone,role,is_active,can_buy,can_sell,address_line1,address_line2,city,state,pincode,business_name,gstin,account_kind,verification_status';const q=await withTimeout(sb.from('user_profiles').select(fields).eq('id',session.user.id).maybeSingle(),8000,'Profile lookup timed out.');if(q.error)throw q.error;return q.data||null;})();
+    if(force)profilePromise=null;
+    if(profilePromise)return profilePromise;
+    profilePromise=(async()=>{
+      const session=await getSession();
+      if(!session)return null;
+      const sb=await getClient();
+      const fields='id,email,full_name,phone,role,is_active,can_buy,can_sell,address_line1,address_line2,city,state,pincode,business_name,gstin,account_kind,verification_status';
+      const result=await withTimeout(
+        sb.from('user_profiles').select(fields).eq('id',session.user.id).maybeSingle(),
+        8000,
+        'Profile lookup timed out.'
+      );
+      if(result.error)throw result.error;
+      return result.data||null;
+    })();
     return profilePromise;
   }
-  const isAdmin=p=>!!p&&(p.role==='super_admin'||p.role==='admin_staff');
-  function homeFor(p){if(!p||p.is_active!==true)return null;if(isAdmin(p))return PATHS.admin;if(p.role==='seller'&&p.can_sell===true)return PATHS.seller;if(p.can_buy===true)return PATHS.buyerDashboard;if(p.can_sell===true)return PATHS.seller;return null;}
-  async function signOutAndLogin(scope,status){try{const sb=await getClient();await sb.auth.signOut();}catch(_){}location.replace(loginUrl(scope,status));return null;}
 
-  async function guard(scope=SCOPE){
+  const isAdmin=profile=>!!profile&&(profile.role==='super_admin'||profile.role==='admin_staff');
+
+  function homeFor(profile,preferred=''){
+    if(!profile||profile.is_active!==true)return null;
+    if(isAdmin(profile))return PATHS.admin;
+    if(preferred==='seller'&&profile.can_sell===true)return PATHS.seller;
+    if(preferred==='buyer'&&profile.can_buy===true)return PATHS.buyerDashboard;
+    if(profile.can_buy===true)return PATHS.buyerDashboard;
+    if(profile.can_sell===true)return PATHS.seller;
+    return null;
+  }
+
+  async function signOutAndLogin(scope,status){
+    try{
+      const sb=await getClient();
+      await withTimeout(sb.auth.signOut(),5000,'Sign out timed out.');
+    }catch(_){}
+    location.replace(loginUrl(scope,status));
+    return null;
+  }
+
+  async function guardImpl(scope){
     const session=await getSession();
-    if(!session){location.replace(loginUrl(scope));return null;}
-    const p=await getProfile(true);
-    if(!p||p.is_active!==true)return signOutAndLogin(scope,'inactive');
+    if(!session){
+      location.replace(loginUrl(scope));
+      return null;
+    }
+
+    const profile=await getProfile(true);
+    if(!profile||profile.is_active!==true)return signOutAndLogin(scope,'inactive');
+
     if(scope==='admin'){
-      if(!isAdmin(p)){location.replace(homeFor(p)||PATHS.login);return null;}
-      release();return p;
+      if(!isAdmin(profile)){
+        location.replace(homeFor(profile)||PATHS.login);
+        return null;
+      }
+      release();
+      return profile;
     }
+
+    if(isAdmin(profile)){
+      location.replace(PATHS.admin);
+      return null;
+    }
+
     if(scope==='seller'){
-      if(isAdmin(p)){location.replace(PATHS.admin);return null;}
-      if(p.can_sell===true){release();return p;}
-      if(p.can_buy===true&&sellerOnboardingRequested()){release();return p;}
-      if(p.can_buy===true){location.replace(PATHS.buyerDashboard+'?status=buyer_only');return null;}
+      if(profile.can_sell===true){
+        release();
+        return profile;
+      }
+      if(profile.can_buy===true&&sellerOnboardingRequested()){
+        release();
+        return profile;
+      }
+      if(profile.can_buy===true){
+        location.replace(PATHS.buyerDashboard+'?status=buyer_only');
+        return null;
+      }
       return signOutAndLogin(scope,'access');
     }
-    if(scope==='buyer'){
-      if(isAdmin(p)){location.replace(PATHS.admin);return null;}
-      if(p.can_buy===true){release();return p;}
-      location.replace(homeFor(p)||loginUrl(scope,'access'));return null;
-    }
-    if(scope==='private'){
-      if(isAdmin(p)){location.replace(PATHS.admin);return null;}
-      if(p.can_buy===true){release();return p;}
-      if(p.can_sell===true){location.replace(PATHS.seller);return null;}
+
+    if(scope==='buyer'||scope==='private'){
+      if(profile.can_buy===true){
+        release();
+        return profile;
+      }
+      if(profile.can_sell===true){
+        location.replace(PATHS.seller);
+        return null;
+      }
       return signOutAndLogin(scope,'access');
     }
-    release();return p;
+
+    release();
+    return profile;
+  }
+
+  function guard(scope=SCOPE){
+    if(guardPromises.has(scope))return guardPromises.get(scope);
+    const promise=guardImpl(scope).catch(error=>{
+      guardPromises.delete(scope);
+      throw error;
+    });
+    guardPromises.set(scope,promise);
+    return promise;
   }
 
   async function routeLanding(){
-    try{const session=await getSession();if(!session)return null;const p=await getProfile(true);if(!p||p.is_active!==true){try{const sb=await getClient();await sb.auth.signOut();}catch(_){}return null;}const dest=homeFor(p);if(dest)location.replace(dest);return p;}catch(err){console.warn('FabricTrad landing session check skipped',err);return null;}
-  }
-  function installLoginHints(){
-    const q=new URLSearchParams(location.search),status=q.get('status'),signup=q.get('signup')==='1';
-    const statusText=status==='inactive'?'This FabricTrad account is not active yet. Please use an active account or contact FabricTrad support.':status==='buyer_only'?'This is a buyer-only FabricTrad account. Seller Centre is not enabled for this account.':status==='access'?'This active account does not currently have permission for that area.':status==='service'?'We could not verify your account session. Please sign in again.':'';
-    let tries=0;const timer=setInterval(()=>{tries++;if(signup){const b=document.getElementById('ft-show-signup');if(b){b.click();}}
-      if(statusText){const box=document.getElementById('ft-login-message');if(box){box.textContent=statusText;box.dataset.type='error';box.hidden=false;}}
-      if((!signup||document.getElementById('ft-signup')?.hidden===false)&&(!statusText||document.getElementById('ft-login-message'))||tries>80)clearInterval(timer);
-    },75);
-  }
-  function sanitizePrivateCommerceCopy(){
-    const fix=()=>{const delivery=document.getElementById('ftbc-delivery');if(delivery&&(delivery.textContent||'').includes('Browse as guest'))delivery.textContent='Active FabricTrad account · Private marketplace access';document.querySelectorAll('.ftbc__bubble').forEach(n=>{if((n.textContent||'').includes('Browsing is public'))n.textContent='This marketplace is private. Sign in with an active FabricTrad account for sourcing and checkout.';});};
-    fix();if(document.documentElement){const obs=new MutationObserver(fix);obs.observe(document.documentElement,{subtree:true,childList:true});setTimeout(()=>obs.disconnect(),12000);}
+    try{
+      const session=await getSession();
+      if(!session)return null;
+      const profile=await getProfile(true);
+      if(!profile||profile.is_active!==true){
+        try{const sb=await getClient();await sb.auth.signOut();}catch(_){}
+        return null;
+      }
+      const destination=homeFor(profile);
+      if(destination)location.replace(destination);
+      return profile;
+    }catch(error){
+      console.warn('FabricTrad landing session check skipped',error);
+      return null;
+    }
   }
 
-  window.FabricTradAuth={version:VERSION,getClient,getSession,getProfile,guard,homeFor,loginUrl,paths:PATHS,withTimeout,refreshProfile:()=>getProfile(true),ready:null};
-  sanitizePrivateCommerceCopy();
-  if(SCOPE==='landing')window.FabricTradAuth.ready=routeLanding();
-  else if(SCOPE==='login'){installLoginHints();window.FabricTradAuth.ready=Promise.resolve(null);}
-  else window.FabricTradAuth.ready=guard(SCOPE).catch(err=>{console.error('FabricTrad auth guard failed',err);location.replace(loginUrl(SCOPE,'service'));return null;});
+  function installLoginHints(){
+    const q=new URLSearchParams(location.search);
+    const status=q.get('status');
+    const signup=q.get('signup')==='1';
+    const statusText=
+      status==='inactive'?'This FabricTrad account is not active yet. Please use an active account or contact FabricTrad support.':
+      status==='buyer_only'?'This account does not currently have Seller Centre access.':
+      status==='access'?'This active account does not currently have permission for that area.':
+      status==='service'?'We could not verify your account session. Please sign in again.':'';
+    let tries=0;
+    const timer=setInterval(()=>{
+      tries++;
+      if(signup){
+        const button=document.getElementById('ft-show-signup');
+        if(button)button.click();
+      }
+      if(statusText){
+        const box=document.getElementById('ft-login-message');
+        if(box){
+          box.textContent=statusText;
+          box.dataset.type='error';
+          box.hidden=false;
+        }
+      }
+      if(tries>80||((!signup||document.getElementById('ft-signup')?.hidden===false)&&(!statusText||document.getElementById('ft-login-message')))){
+        clearInterval(timer);
+      }
+    },75);
+  }
+
+  window.FabricTradAuth={
+    version:VERSION,
+    getClient,
+    getSession,
+    getProfile,
+    guard,
+    homeFor,
+    loginUrl,
+    paths:PATHS,
+    withTimeout,
+    refreshProfile:()=>getProfile(true),
+    ready:null
+  };
+
+  if(SCOPE==='landing'){
+    window.FabricTradAuth.ready=routeLanding();
+  }else if(SCOPE==='login'){
+    installLoginHints();
+    window.FabricTradAuth.ready=Promise.resolve(null);
+  }else{
+    window.FabricTradAuth.ready=guard(SCOPE).catch(error=>{
+      console.error('FabricTrad auth guard failed',error);
+      release();
+      location.replace(loginUrl(SCOPE,'service'));
+      return null;
+    });
+  }
+
+  if(SCOPE!=='landing'&&SCOPE!=='login'){
+    setTimeout(()=>{
+      if(document.documentElement.classList.contains('ft-auth-pending')){
+        console.error('FabricTrad auth safety timeout');
+        release();
+        location.replace(loginUrl(SCOPE,'service'));
+      }
+    },18000);
+  }
 })();
 </script>
 {% schema %}{"name":"FabricTrad auth","tag":"section","class":"fabrictrad-auth-router","settings":[],"presets":[{"name":"FabricTrad auth"}]}{% endschema %}
