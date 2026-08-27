@@ -1,0 +1,16 @@
+CHANGED	templates/404.json
+CHANGED	templates/article.json
+CHANGED	templates/blog.json
+CHANGED	templates/cart.json
+CHANGED	templates/collection.json
+CHANGED	templates/index.json
+CHANGED	templates/list-collections.json
+CHANGED	templates/page.contact.json
+MISSING	templates/page.fabrictrad-admin.json
+MISSING	templates/page.fabrictrad-buyer.json
+MISSING	templates/page.fabrictrad-login.json
+CHANGED	templates/page.json
+MISSING	templates/page.seller-portal.json
+CHANGED	templates/password.json
+CHANGED	templates/product.json
+CHANGED	templates/search.json
