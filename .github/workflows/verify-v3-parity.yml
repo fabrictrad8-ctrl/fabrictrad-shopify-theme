@@ -1,0 +1,70 @@
+name: Verify FabricTrad v3 parity
+
+on:
+  push:
+    branches:
+      - auth-hotfix-v3
+      - staging
+
+permissions:
+  contents: write
+
+concurrency:
+  group: verify-v3-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify theme checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import glob, hashlib, os
+          source = {}
+          for manifest in sorted(glob.glob('.sync/source-manifest-*.tsv')):
+              with open(manifest, encoding='utf-8') as f:
+                  for raw in f:
+                      raw = raw.rstrip('\n')
+                      if not raw:
+                          continue
+                      path, md5, size = raw.split('\t')
+                      source[path] = (md5, int(size))
+          roots = ('assets','blocks','config','layout','locales','sections','snippets','templates')
+          rows=[]
+          for path,(expected_md5,expected_size) in sorted(source.items()):
+              if not os.path.isfile(path):
+                  rows.append(('MISSING',path,expected_md5,'-',expected_size,'-'))
+                  continue
+              data=open(path,'rb').read()
+              actual=hashlib.md5(data).hexdigest()
+              if actual!=expected_md5:
+                  rows.append(('CHANGED',path,expected_md5,actual,expected_size,len(data)))
+          source_paths=set(source)
+          for root in roots:
+              if not os.path.isdir(root): continue
+              for dirpath,_,filenames in os.walk(root):
+                  for filename in filenames:
+                      path=os.path.join(dirpath,filename).replace(os.sep,'/')
+                      if path not in source_paths:
+                          rows.append(('EXTRA',path,'-','-','-',os.path.getsize(path)))
+          with open('.sync/v3-current-diff.tsv','w',encoding='utf-8') as out:
+              out.write('status\tpath\texpected_md5\tactual_md5\texpected_size\tactual_size\n')
+              for row in rows: out.write('\t'.join(map(str,row))+'\n')
+          missing_changed=sum(r[0] in ('MISSING','CHANGED') for r in rows)
+          extras=sum(r[0]=='EXTRA' for r in rows)
+          with open('.sync/v3-parity-summary.txt','w',encoding='utf-8') as out:
+              out.write(f'Source files: {len(source)}\nMissing/changed: {missing_changed}\nExtra theme files: {extras}\n')
+          print(open('.sync/v3-parity-summary.txt').read())
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .sync/v3-current-diff.tsv .sync/v3-parity-summary.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Update FabricTrad v3 parity report"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
