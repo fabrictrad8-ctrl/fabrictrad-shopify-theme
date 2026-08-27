@@ -22,7 +22,7 @@ jobs:
           fetch_preview() {
             local path="$1" out="$2" join='?'; [[ "$path" == *'?'* ]] && join='&'
             curl --fail --silent --show-error --location --connect-timeout 10 --max-time 45 \
-              --cookie "$cookie" --cookie-jar "$cookie" -A 'Mozilla/5.0 FabricTradPreviewVerifier/4.0' \
+              --cookie "$cookie" --cookie-jar "$cookie" -A 'Mozilla/5.0 FabricTradPreviewVerifier/4.1' \
               "https://www.fabrictrad.com${path}${join}preview_theme_id=${THEME_ID}&pb=0&ft_verify=${GITHUB_RUN_ID}" -o "$out"
             test "$(wc -c < "$out")" -gt 1000
           }
@@ -54,11 +54,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'One FabricTrad account. Three purpose-built workspaces' /tmp/home.html
+          grep -q 'Textile trade, rebuilt for now.' /tmp/home.html
+          grep -q 'One platform, two focused workspaces' /tmp/home.html
+          grep -q 'Admin control layer' /tmp/home.html
           grep -q '>Platform<' /tmp/home.html
           grep -q '>Capabilities<' /tmp/home.html
-          grep -q 'How To Use' /tmp/home.html
-          grep -q '>Trust<' /tmp/home.html
+          grep -q 'How to Use' /tmp/home.html
+          grep -q 'Trust & Safety' /tmp/home.html
           grep -q 'Virtual Drape' /tmp/home.html
           grep -q '/pages/login\|customer_authentication/login' /tmp/home.html
 
@@ -117,14 +119,15 @@ jobs:
           ! grep -q 'ftsp-application-form' /tmp/seller.html
           ! grep -q 'fabrictrad-seller-onboarding-bridge' /tmp/seller.html
           ! grep -q 'request_seller_access' /tmp/seller.html
-          ! grep -qi 'Switch to buyer' /tmp/seller.html
+          ! grep -qi '>Switch to buyer<' /tmp/seller.html
+          ! grep -q 'href="/pages/buyer-dashboard"' /tmp/seller.html
 
       - name: Verify Admin operations parity and privileged bridges
         shell: bash
         run: |
           set -euo pipefail
           grep -q 'data-fabrictrad-admin' /tmp/admin.html
-          for label in '>Home<' '>Activity<' '>Orders<' '>Products<' '>Customers<' '>Sellers<' '>Payments<' 'Returns & disputes' '>Reconciliation<' '>Fulfillment<' '>Analytics<' 'Top sellers' '>Discounts<' 'Error monitor' '>Settings<'; do grep -q "$label" /tmp/admin.html; done
+          for label in 'Home' 'Activity' 'Orders' 'Products' 'Customers' 'Sellers' 'Payments' 'Returns & disputes' 'Reconciliation' 'Fulfillment' 'Analytics' 'Top sellers' 'Discounts' 'Error monitor' 'Settings'; do grep -q "$label" /tmp/admin.html; done
           grep -q 'marketplace-admin-data' /tmp/admin.html
           grep -q 'marketplace-admin-action' /tmp/admin.html
           grep -q 'admin-otp-request-shopify' /tmp/admin.html
@@ -148,7 +151,7 @@ jobs:
           grep -q 'Personal Buyer rules' /tmp/product.html
           grep -q 'buyer_wishlist' /tmp/product.html
           grep -q 'seller_product_variants' /tmp/product.html
-          grep -q 'Virtual Drape' /tmp/product.html
+          grep -qi 'Generate virtual drape' /tmp/product.html
           grep -q 'action="/cart/add\|/cart/add' /tmp/product.html
 
       - name: Verify protected Shopify commerce surfaces
