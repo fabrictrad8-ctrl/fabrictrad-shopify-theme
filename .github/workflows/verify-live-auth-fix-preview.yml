@@ -1,4 +1,4 @@
-name: Verify FabricTrad primary-role preview
+name: Verify FabricTrad GitHub parity preview
 
 on:
   push:
@@ -24,55 +24,70 @@ jobs:
           cookie=/tmp/ft-preview-cookie.txt
           fetch_preview() {
             local path="$1" out="$2"
+            local join='?'
+            [[ "$path" == *'?'* ]] && join='&'
             curl --fail --silent --show-error --location \
               --connect-timeout 10 --max-time 40 \
               --cookie "$cookie" --cookie-jar "$cookie" \
-              -A 'Mozilla/5.0 FabricTradPreviewVerifier/2.2' \
-              "https://www.fabrictrad.com${path}?preview_theme_id=${THEME_ID}&pb=0&ft_verify=${GITHUB_RUN_ID}" \
+              -A 'Mozilla/5.0 FabricTradPreviewVerifier/3.0' \
+              "https://www.fabrictrad.com${path}${join}preview_theme_id=${THEME_ID}&pb=0&ft_verify=${GITHUB_RUN_ID}" \
               -o "$out"
           }
           fetch_preview '/pages/login' /tmp/login.html
+          fetch_preview '/pages/register' /tmp/register.html
+          fetch_preview '/pages/buyer-registration?type=end_user' /tmp/buyer-reg.html
+          fetch_preview '/pages/seller-registration' /tmp/seller-reg.html
           fetch_preview '/pages/buyer-dashboard' /tmp/buyer.html
           fetch_preview '/pages/seller-portal' /tmp/seller.html
-          echo "Login bytes: $(wc -c < /tmp/login.html)"
-          echo "Buyer bytes: $(wc -c < /tmp/buyer.html)"
-          echo "Seller bytes: $(wc -c < /tmp/seller.html)"
+          for f in login register buyer-reg seller-reg buyer seller; do echo "$f bytes: $(wc -c < /tmp/$f.html)"; done
 
-      - name: Verify Buyer login identity separation
+      - name: Verify generic account login
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '20260828-primary-role-v1' /tmp/login.html
-          grep -q 'separate identity and separate workspace' /tmp/login.html
-          grep -q 'Sign in as Buyer' /tmp/login.html
+          grep -q '20260828-github-parity-v1' /tmp/login.html
+          grep -q 'One account for textile commerce' /tmp/login.html
+          grep -q 'Your account role determines where you continue' /tmp/login.html
+          ! grep -q 'separate identity and separate workspace' /tmp/login.html
+          ! grep -q 'Sign in as Buyer' /tmp/login.html
 
-      - name: Verify Buyer route primary-role guard
+      - name: Verify original registration route model
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '2026-08-28-primary-role-v1' /tmp/buyer.html
-          grep -q "role==='seller'" /tmp/buyer.html
+          grep -q 'One account. Start with what you need today.' /tmp/register.html
+          grep -q '/pages/buyer-registration?type=end_user' /tmp/register.html
+          grep -q '/pages/buyer-registration?type=retail_store' /tmp/register.html
+          grep -q '/pages/seller-registration' /tmp/register.html
+          grep -q 'Personal Buyer account' /tmp/buyer-reg.html
+          grep -q 'Retail store' /tmp/buyer-reg.html
+          grep -q 'same FabricTrad identity' /tmp/seller-reg.html
+          grep -q 'request_seller_access' /tmp/seller-reg.html
+          grep -q 'set_current_account_phone' /tmp/seller-reg.html
+
+      - name: Verify Buyer workspace isolation
+        shell: bash
+        run: |
+          set -euo pipefail
           grep -q 'fabrictrad-buyer-dashboard' /tmp/buyer.html
+          grep -q "role==='seller'" /tmp/buyer.html
+          ! grep -qi 'Switch to seller' /tmp/buyer.html
+          ! grep -qi 'Seller Dashboard' /tmp/buyer.html
           ! grep -q 'Preparing your buyer workspace' /tmp/buyer.html
 
-      - name: Verify Seller Centre primary-role guard
+      - name: Verify Seller workspace isolation
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '20260828-primary-role-v1' /tmp/seller.html
-          grep -q "role!=='seller'" /tmp/seller.html
-          grep -q 'Seller Centre requires a separate Seller account' /tmp/seller.html
-
-      - name: Verify hybrid seller upgrade is absent
-        shell: bash
-        run: |
-          set -euo pipefail
-          ! grep -q 'request_seller_access' /tmp/seller.html
+          grep -q 'fabrictrad-seller-auth-policy' /tmp/seller.html
+          grep -q 'p.can_sell' /tmp/seller.html
           ! grep -q 'fabrictrad-seller-onboarding-bridge' /tmp/seller.html
+          ! grep -q 'request_seller_access' /tmp/seller.html
+          grep -q 'fabrictrad-seller-ui-policy' /tmp/seller.html
 
       - name: Verify Shopify origin
         shell: bash
         run: |
           set -euo pipefail
           grep -qi 'cdn.shopify.com' /tmp/buyer.html
-          echo 'PASS: Buyer, Seller and Admin entry paths are isolated by primary role; legacy spinner and seller-upgrade bridge are absent.'
+          echo 'PASS: Shopify candidate follows the original FabricTrad route/account model: generic login, separate registration routes, same underlying identity, isolated Buyer/Seller workspaces, and Seller Registration outside Seller Dashboard.'
