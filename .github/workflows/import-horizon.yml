@@ -1,0 +1,40 @@
+name: Import Horizon 4.1.4 base
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/import-horizon.yml
+
+permissions:
+  contents: write
+
+jobs:
+  import-horizon:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out FabricTrad theme repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Import exact Shopify Horizon 4.1.4 base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone https://github.com/Shopify/horizon.git /tmp/horizon
+          git -C /tmp/horizon checkout f63ddf8648b43f5accdb7928bf1aefec04a1ad24
+          rsync -a --delete --exclude '.git/' --exclude '.github/' /tmp/horizon/ "$GITHUB_WORKSPACE/"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "Horizon 4.1.4 is already imported."
+            exit 0
+          fi
+
+          git commit -m "Import Shopify Horizon v4.1.4 base"
+          git push origin HEAD:main
