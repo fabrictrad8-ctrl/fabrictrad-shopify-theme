@@ -1,0 +1,26 @@
+{
+  "sections": {
+    "seller_auth_policy": {
+      "type": "fabrictrad-seller-auth-policy",
+      "settings": {}
+    },
+    "seller_portal": {
+      "type": "fabrictrad-seller-portal",
+      "settings": {}
+    },
+    "seller_docs": {
+      "type": "fabrictrad-seller-documents",
+      "settings": {}
+    },
+    "seller_order_actions": {
+      "type": "fabrictrad-seller-order-actions",
+      "settings": {}
+    }
+  },
+  "order": [
+    "seller_auth_policy",
+    "seller_portal",
+    "seller_docs",
+    "seller_order_actions"
+  ]
+}
