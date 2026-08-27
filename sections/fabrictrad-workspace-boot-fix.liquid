@@ -1,0 +1,93 @@
+<div data-ft-workspace-boot-fix hidden aria-hidden="true"></div>
+<script>
+(function(){
+  if(window.__FT_WORKSPACE_BOOT_FIX_V4__) return;
+  window.__FT_WORKSPACE_BOOT_FIX_V4__ = true;
+
+  const path = location.pathname;
+  const scope = path.includes('/pages/buyer-dashboard') ? 'buyer' : path.includes('/pages/seller-portal') ? 'seller' : null;
+  if(!scope) return;
+
+  const cfg = scope === 'buyer'
+    ? { loader: 'ftb-loading', workspace: '[data-ft-buyer-workspace]' }
+    : { loader: 'fts-loading', workspace: '[data-ft-seller-workspace]' };
+
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const timeout = (promise, ms, message) => Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
+  ]);
+
+  async function waitForAuth(){
+    for(let i = 0; i < 200; i++){
+      const auth = window.FabricTradAuth;
+      if(auth && auth.ready && typeof auth.guard === 'function') return auth;
+      await sleep(50);
+    }
+    throw new Error('FabricTrad authentication did not initialise.');
+  }
+
+  function nodes(){
+    return {
+      loader: document.getElementById(cfg.loader),
+      workspace: document.querySelector(cfg.workspace)
+    };
+  }
+
+  function reveal(){
+    const n = nodes();
+    if(n.loader) n.loader.hidden = true;
+    if(n.workspace){
+      n.workspace.hidden = false;
+      n.workspace.removeAttribute('aria-hidden');
+    }
+    document.body && document.body.classList.add('ft-workspace-authorized');
+    return !!n.workspace;
+  }
+
+  function showFailure(error){
+    const n = nodes();
+    if(!n.loader) return;
+    n.loader.hidden = false;
+    n.loader.innerHTML = '<div style="max-width:520px;padding:28px;text-align:center"><strong style="display:block;color:#991b1b;margin-bottom:8px">Workspace could not finish loading.</strong><span style="color:#667085;font-size:13px">'+String(error && error.message || 'Please refresh and try again.')+'</span><br><button type="button" onclick="location.reload()" style="margin-top:14px;padding:10px 14px;border:1px solid #d0d5dd;border-radius:9px;background:#fff;cursor:pointer">Retry</button></div>';
+  }
+
+  async function run(){
+    const auth = await waitForAuth();
+
+    if(!auth.__ftWorkspaceGuardDeduped){
+      const originalGuard = auth.guard.bind(auth);
+      auth.guard = function(requestedScope){
+        if(requestedScope === scope && auth.ready) return Promise.resolve(auth.ready);
+        return originalGuard(requestedScope);
+      };
+      auth.__ftWorkspaceGuardDeduped = true;
+    }
+
+    const profile = await timeout(auth.ready, 15000, 'Account verification timed out.');
+    if(!profile) return;
+    if(scope === 'buyer' && profile.can_buy !== true) return;
+    if(scope === 'seller' && profile.can_sell !== true) return;
+
+    const started = Date.now();
+    while(Date.now() - started < 8000){
+      if(reveal()) break;
+      await sleep(50);
+    }
+
+    reveal();
+    let ticks = 0;
+    const keepVisible = setInterval(function(){
+      ticks += 1;
+      reveal();
+      if(ticks >= 80) clearInterval(keepVisible);
+    }, 250);
+  }
+
+  run().catch(function(error){
+    console.error('FabricTrad workspace boot fix failed', error);
+    showFailure(error);
+  });
+})();
+</script>
+{% schema %}{"name":"Workspace boot fix","tag":"section","class":"fabrictrad-workspace-boot-fix","settings":[],"presets":[{"name":"Workspace boot fix"}]}{% endschema %}
