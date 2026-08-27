@@ -1,7 +1,6 @@
 status	path	expected_md5	actual_md5	expected_size	actual_size
 CHANGED	assets/base.css	42272d62c7cc3ed8cfa316cc8bb570b9	9dc349af02d845286dca07e41eea543e	45323	43993
 MISSING	assets/ft-buyer-commerce-parity.css	f56de1d5144fcbee7b443c2081fafa93	-	9069	-
-MISSING	assets/ft-cloudflare-human-ui.css	53ed70d2e8d88c5986bcdbe2eec23d60	-	17325	-
 CHANGED	blocks/_featured-blog-posts-title.liquid	f39c9da1469378d579d10c03b343065c	98b26a3b1c99075b77220f0f21877eff	8499	8498
 CHANGED	blocks/_header-logo.liquid	e09a0cc322ec23d4af10ad34b79cc8b5	52ad09411693b23de7be5de2265e8db1	5772	5729
 CHANGED	config/settings_data.json	3eccf92f8fb8da3ec15c1a326570f822	605322c35ed7c49631bdf45843992935	7873	5850
