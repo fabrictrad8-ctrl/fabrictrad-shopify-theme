@@ -1,0 +1,70 @@
+name: Classify Shopify theme parity diff
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/classify-diff.yml
+
+permissions:
+  contents: write
+
+jobs:
+  classify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Classify byte-only newline differences
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv, hashlib, os
+
+          material=[]
+          whitespace=[]
+          with open('.sync/diff-files.tsv', encoding='utf-8') as f:
+              rows=csv.DictReader(f, delimiter='\t')
+              for r in rows:
+                  status=r['status']
+                  path=r['path']
+                  expected=r['expected_md5']
+                  if status == 'MISSING':
+                      material.append(('MISSING', path))
+                      continue
+                  if status == 'EXTRA':
+                      material.append(('EXTRA', path))
+                      continue
+                  data=open(path,'rb').read()
+                  candidates=[]
+                  for pre in range(0,6):
+                      for post in range(0,4):
+                          if pre==0 and post==0:
+                              continue
+                          candidate=(b'\n'*pre)+data+(b'\n'*post)
+                          if hashlib.md5(candidate).hexdigest()==expected:
+                              candidates.append((pre,post))
+                  if candidates:
+                      pre,post=sorted(candidates, key=lambda x:(x[0]+x[1],x))[0]
+                      whitespace.append((path,pre,post))
+                  else:
+                      material.append(('CHANGED',path))
+
+          with open('.sync/material-diff.tsv','w',encoding='utf-8') as out:
+              for status,path in material:
+                  out.write(f'{status}\t{path}\n')
+          with open('.sync/newline-only-diff.tsv','w',encoding='utf-8') as out:
+              for path,pre,post in whitespace:
+                  out.write(f'{path}\tprepend_newlines={pre}\tappend_newlines={post}\n')
+          with open('.sync/classification-summary.txt','w',encoding='utf-8') as out:
+              out.write(f'Material missing/changed/extra: {len(material)}\n')
+              out.write(f'Newline-only differences: {len(whitespace)}\n')
+          print(open('.sync/classification-summary.txt').read())
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .sync/material-diff.tsv .sync/newline-only-diff.tsv .sync/classification-summary.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Classify Shopify theme parity differences"
+          git push origin HEAD:main
