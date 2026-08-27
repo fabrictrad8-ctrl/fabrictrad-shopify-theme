@@ -22,7 +22,7 @@ jobs:
           fetch_preview() {
             local path="$1" out="$2" join='?'; [[ "$path" == *'?'* ]] && join='&'
             curl --fail --silent --show-error --location --connect-timeout 10 --max-time 40 \
-              --cookie "$cookie" --cookie-jar "$cookie" -A 'Mozilla/5.0 FabricTradPreviewVerifier/3.3' \
+              --cookie "$cookie" --cookie-jar "$cookie" -A 'Mozilla/5.0 FabricTradPreviewVerifier/3.4' \
               "https://www.fabrictrad.com${path}${join}preview_theme_id=${THEME_ID}&pb=0&ft_verify=${GITHUB_RUN_ID}" -o "$out"
           }
           fetch_preview '/pages/login' /tmp/login.html
@@ -31,6 +31,15 @@ jobs:
           fetch_preview '/pages/seller-registration' /tmp/seller-reg.html
           fetch_preview '/pages/buyer-dashboard' /tmp/buyer.html
           fetch_preview '/pages/seller-portal' /tmp/seller.html
+          mkdir -p /tmp/fabrictrad-preview
+          cp /tmp/*.html /tmp/fabrictrad-preview/
+
+      - name: Upload rendered preview HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabrictrad-preview-html
+          path: /tmp/fabrictrad-preview
+          retention-days: 1
 
       - name: Verify generic account login
         run: |
