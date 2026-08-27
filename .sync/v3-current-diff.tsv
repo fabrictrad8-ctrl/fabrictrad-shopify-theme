@@ -23,7 +23,6 @@ MISSING	sections/fabrictrad-seller-access-onboarding.liquid	d3e153763ce4526719a5
 MISSING	sections/fabrictrad-seller-documents.liquid	4d6251fe1392da14fe53b26561a016bb	-	11541	-
 MISSING	sections/fabrictrad-seller-order-actions.liquid	4860308f652355a164ec8f39d72da229	-	10644	-
 MISSING	sections/fabrictrad-seller-portal.liquid	0c84f53a14848c4ee42ff087663fd820	-	28163	-
-MISSING	sections/fabrictrad-seller-workspace.liquid	d3653d2058695b50b21e048cede519a3	-	57732	-
 MISSING	sections/fabrictrad-virtual-drape.liquid	c6a5cbe2517ea67160d2a98d27d8dd18	-	7232	-
 CHANGED	sections/footer-group.json	89219d57567f6585e3f160871f90ed1c	3c287ec43123092ed2b839af223942fb	3860	7848
 CHANGED	sections/header-group.json	57f978403ffcd498236466aa1dfb24b2	8fde7ca85c2d03f6db1c6232c32eb589	2389	3295
