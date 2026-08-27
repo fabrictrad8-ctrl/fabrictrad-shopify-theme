@@ -1,0 +1,67 @@
+name: Verify FabricTrad live auth fix preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-live-auth-fix-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify fixed unpublished theme through Shopify preview
+        shell: bash
+        env:
+          THEME_ID: '163775742170'
+        run: |
+          set -euo pipefail
+          cookie=/tmp/ft-preview-cookie.txt
+
+          fetch_preview() {
+            local path="$1" out="$2"
+            curl --fail --silent --show-error --location \
+              --connect-timeout 10 --max-time 40 \
+              --cookie "$cookie" --cookie-jar "$cookie" \
+              -A 'Mozilla/5.0 FabricTradPreviewVerifier/1.0' \
+              "https://www.fabrictrad.com${path}?preview_theme_id=${THEME_ID}&pb=0&ft_verify=${GITHUB_RUN_ID}" \
+              -o "$out"
+          }
+
+          fetch_preview '/pages/login' /tmp/login.html
+          fetch_preview '/pages/buyer-dashboard' /tmp/buyer.html
+
+          echo "Login bytes: $(wc -c < /tmp/login.html)"
+          echo "Buyer bytes: $(wc -c < /tmp/buyer.html)"
+
+          grep -q '20260828-main-auth-v2' /tmp/login.html || {
+            echo '::error::Preview login did not contain the repaired login version.'
+            exit 1
+          }
+
+          grep -q '2026-08-28-main-auth-v2' /tmp/buyer.html || {
+            echo '::error::Preview buyer route did not contain the repaired auth-router version.'
+            exit 1
+          }
+
+          if grep -q 'Preparing your buyer workspace' /tmp/buyer.html; then
+            echo '::error::Old infinite buyer-workspace spinner is still present in the fixed preview.'
+            exit 1
+          fi
+
+          grep -q 'fabrictrad-buyer-dashboard' /tmp/buyer.html || {
+            echo '::error::Expected current buyer dashboard section was not rendered.'
+            exit 1
+          }
+
+          grep -qi 'cdn.shopify.com' /tmp/buyer.html || {
+            echo '::error::Buyer preview was not served by Shopify.'
+            exit 1
+          }
+
+          echo 'PASS: fixed preview contains repaired auth, current dashboard, and no legacy spinner.'
