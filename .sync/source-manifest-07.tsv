@@ -7,7 +7,7 @@ sections/fabrictrad-direct-commerce-fixes.liquid	dd4ca8058fbd4027a9a092fd7d9770f
 sections/fabrictrad-global-route-fixes.liquid	46fbc970a74f7a9fef9de2c8f9303918	451
 sections/fabrictrad-home.liquid	7a7b3850ebebec6543ca8232510ed9a3	8873
 sections/fabrictrad-login-capability-route.liquid	bbae4290066ddfab707e3acd75f10043	4642
-sections/fabrictrad-login.liquid	30458a04783614488a90d4f46e2457cc	18495
+sections/fabrictrad-login.liquid	0f86111502eb86d7ffcd229b4c06d7c8	19069
 sections/fabrictrad-product-detail.liquid	53f12855ee312eb3873f0392f3ab8854	11244
 sections/fabrictrad-product-stock-guard.liquid	dc11d343c5c8281f17bbaca58f7039b6	2251
 sections/fabrictrad-seller-access-onboarding.liquid	d3e153763ce4526719a5798dee112ce3	7521
@@ -45,7 +45,7 @@ sections/password-footer.liquid	b6bd4b69c0a2450477040da43f3e8108	2314
 sections/password.liquid	2860e255321e21854b8c51518fb29a75	8142
 sections/predictive-search-empty.liquid	fb3b2c70237c87004b88fc68d1103155	290
 sections/predictive-search.liquid	99b1a0246361fccaf2585bf5aba629d4	6511
-sections/product-hotspots.liquid	da74e51f268421858bd2a12c9f99a826	19573
+sections/product-hotspots.liquid	da74e51f268421858bd2a12c9f99faad	19573
 sections/product-information.liquid	ed05d5e08e59dc423f5f7c012772c3cc	12713
 sections/product-list.liquid	15521ae8fbed587446acef5f8534d613	26680
 sections/product-recommendations.liquid	7df4ca919909c63cff288c90767036fb	16033
