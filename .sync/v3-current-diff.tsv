@@ -42,7 +42,7 @@ CHANGED	templates/index.json	c54708d2255c0cec3c1ad1362b88897b	d096e1b604c1107f70
 CHANGED	templates/list-collections.json	c4de05458cb4e725ab24f1911a00b948	de7af3a80eafecc450b3c0a2ec17f39d	5571	5566
 CHANGED	templates/page.contact.json	f88c7b7186bb52ff56210c2a5d08066a	6e5f1d62af8777cf4704f92b5c435af1	4426	4336
 MISSING	templates/page.fabrictrad-admin.json	f99ceecbbcac15ac5eb5a6070cdbf376	-	430	-
-CHANGED	templates/page.fabrictrad-login.json	1fe23e7096dd8481e62315a8c901e4c5	2adfec38edab834ed11b963f2687aa23	262	625
+CHANGED	templates/page.fabrictrad-login.json	1fe23e7096dd8481e62315a8c901e4c5	abdaa5df1803452e8fe1ea582a161390	262	537
 CHANGED	templates/page.json	eb9984ce584bd0df3a0af0a16abd22fd	4490e1b11e3117a1b5c7a7e01e1ab6e4	1687	1647
 CHANGED	templates/password.json	13a0d16e133abfd30b4b0a467ffab769	80b17074b9089a1bc4a01b4cc85897c1	4508	4235
 CHANGED	templates/product.json	8613ad45ebc1d0d84b32ca102a683e08	d40dc0dd078d2b36012dc403c91bcc0f	303	14063
