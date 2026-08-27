@@ -1,0 +1,21 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "auth": {"type": "fabrictrad-auth-router", "settings": {}},
+    "bootfix": {"type": "fabrictrad-workspace-boot-fix", "settings": {}},
+    "access": {"type": "fabrictrad-seller-access-onboarding", "settings": {}},
+    "main": {"type": "fabrictrad-seller-workspace", "settings": {}},
+    "documents": {"type": "fabrictrad-seller-documents", "settings": {}},
+    "pickup": {"type": "fabrictrad-shiprocket-pickup-settings", "settings": {}},
+    "direct": {"type": "fabrictrad-direct-commerce-fixes", "settings": {}}
+  },
+  "order": ["auth", "bootfix", "access", "main", "documents", "pickup", "direct"]
+}
