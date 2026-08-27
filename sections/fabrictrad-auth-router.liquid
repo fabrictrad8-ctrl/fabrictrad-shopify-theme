@@ -1,0 +1,32 @@
+{% assign ft_buyer_protected = false %}
+{% if request.page_type == 'product' or request.page_type == 'collection' or request.page_type == 'search' or request.page_type == 'cart' %}{% assign ft_buyer_protected = true %}{% endif %}
+{% if request.page_type == 'page' and page.handle == 'buyer-dashboard' %}{% assign ft_buyer_protected = true %}{% endif %}
+{% if ft_buyer_protected %}<style id="ft-auth-cloak">html{visibility:hidden!important}</style>{% endif %}
+<script>
+(function(){
+  const VERSION='2026-08-28-primary-role-v1';
+  const URL='https://rdhfwlzhcvwjhkxhhpoo.supabase.co';
+  const KEY='sb_publishable_Un2-RQfjGbIiXF3Mb2oGIA_p-Z1kMls';
+  const PROTECTED={{ ft_buyer_protected | json }};
+  const BUYER_LOGIN='/pages/login', SELLER='/pages/seller-portal', ADMIN='/pages/fabrictrad-admin';
+  const SOURCES=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.0','https://unpkg.com/@supabase/supabase-js@2.110.0'];
+  let clientPromise=null,profilePromise=null;
+  function timeout(promise,ms,message){return Promise.race([Promise.resolve(promise),new Promise((_,reject)=>setTimeout(()=>reject(new Error(message)),ms))]);}
+  function reveal(){const cloak=document.getElementById('ft-auth-cloak');if(cloak)cloak.remove();document.documentElement.style.visibility='';}
+  function safeNext(){const raw=location.pathname+location.search;return raw.startsWith('/')&&!raw.startsWith('//')?raw:'/collections/fabrictrad-catalogue';}
+  function buyerLoginUrl(){return BUYER_LOGIN+'?next='+encodeURIComponent(safeNext());}
+  function isAdminRole(role){return role==='super_admin'||role==='admin_staff';}
+  function primaryRole(profile,session){return profile?.role||session?.user?.user_metadata?.role||session?.user?.app_metadata?.role||null;}
+  function buyerDestination(profile,session){const role=primaryRole(profile,session);if(isAdminRole(role))return ADMIN;if(role==='seller')return SELLER;if(!profile||profile.is_active!==true)return BUYER_LOGIN;if(role==='buyer'&&profile.can_buy!==false)return null;return BUYER_LOGIN;}
+  async function loadLibrary(){if(window.supabase?.createClient)return;if(window.__fabrictradSupabaseLoader)return window.__fabrictradSupabaseLoader;window.__fabrictradSupabaseLoader=(async()=>{let lastError=null;for(const src of SOURCES){try{await timeout(new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.async=true;s.crossOrigin='anonymous';s.onload=()=>window.supabase?.createClient?resolve():reject(new Error('Secure sign-in library loaded incorrectly.'));s.onerror=()=>reject(new Error('Unable to load secure sign-in library.'));document.head.appendChild(s);}),7000,'Secure sign-in library timed out.');if(window.supabase?.createClient)return;}catch(error){lastError=error;console.warn('FabricTrad auth source failed',src,error);}}throw lastError||new Error('Unable to load secure sign-in.');})();return window.__fabrictradSupabaseLoader;}
+  async function getClient(){if(!clientPromise)clientPromise=loadLibrary().then(()=>window.supabase.createClient(URL,KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}));return clientPromise;}
+  async function getSession(){const sb=await getClient();const result=await timeout(sb.auth.getSession(),8000,'Session lookup timed out.');if(result?.error)throw result.error;return result?.data?.session||null;}
+  async function getProfile(force=false){if(force)profilePromise=null;if(profilePromise)return profilePromise;profilePromise=(async()=>{const sb=await getClient();const session=await getSession();if(!session)return null;let result=await timeout(sb.from('user_profiles').select('id,email,full_name,role,is_active,can_buy,can_sell').eq('id',session.user.id).maybeSingle(),8000,'Profile lookup timed out.');if(result.error)throw result.error;if(result.data)return result.data;const metadataRole=session.user?.user_metadata?.role||session.user?.app_metadata?.role||null;if(metadataRole==='seller')return{id:session.user.id,email:session.user.email,role:'seller',is_active:true,can_buy:false,can_sell:true};if(isAdminRole(metadataRole))return{id:session.user.id,email:session.user.email,role:metadataRole,is_active:true,can_buy:false,can_sell:false};const ensured=await timeout(sb.rpc('ensure_current_account_profile',{p_requested_role:'buyer'}),8000,'Buyer account setup timed out.');if(ensured.error)throw ensured.error;result=await timeout(sb.from('user_profiles').select('id,email,full_name,role,is_active,can_buy,can_sell').eq('id',session.user.id).maybeSingle(),8000,'Profile lookup timed out.');if(result.error)throw result.error;return result.data||null;})();return profilePromise;}
+  async function requireBuyer(){const session=await getSession();if(!session){location.replace(buyerLoginUrl());return null;}const profile=await getProfile(true);const destination=buyerDestination(profile,session);if(destination){if(destination===BUYER_LOGIN)location.replace(buyerLoginUrl());else location.replace(destination);return null;}return profile;}
+  window.FabricTradAuth={version:VERSION,getClient,getSession,getProfile,requireBuyer,buyerLoginUrl,refreshProfile:()=>getProfile(true),paths:{buyerLogin:BUYER_LOGIN,seller:SELLER,admin:ADMIN}};
+  window.addEventListener('pageshow',event=>{if(PROTECTED&&event.persisted)location.reload();});
+  document.addEventListener('DOMContentLoaded',async()=>{document.querySelectorAll('a[href*="/customer_authentication/login"],a[href="/account/login"]').forEach(a=>a.setAttribute('href',BUYER_LOGIN));document.querySelectorAll('a[href="/account/register"]').forEach(a=>a.setAttribute('href',BUYER_LOGIN+'?signup=buyer'));if(!PROTECTED){reveal();return;}try{const profile=await timeout(requireBuyer(),15000,'Buyer account verification timed out.');if(profile)reveal();}catch(error){console.error('FabricTrad buyer gate failed',error);reveal();location.replace(buyerLoginUrl());}},{once:true});
+  if(PROTECTED)setTimeout(()=>{if(document.getElementById('ft-auth-cloak')){reveal();location.replace(buyerLoginUrl());}},18000);
+})();
+</script>
+{% schema %}{"name":"FabricTrad auth router","tag":"section","class":"fabrictrad-auth-router","settings":[],"presets":[{"name":"FabricTrad auth router"}]}{% endschema %}
