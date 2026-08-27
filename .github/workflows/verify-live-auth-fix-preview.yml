@@ -1,4 +1,4 @@
-name: Verify FabricTrad GitHub parity preview
+name: Verify FabricTrad Shopify product parity
 
 on:
   push:
@@ -11,9 +11,9 @@ permissions: { contents: read }
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
-      - name: Fetch Shopify preview pages
+      - name: Fetch Shopify preview surfaces
         shell: bash
         env: { THEME_ID: '163775742170' }
         run: |
@@ -21,18 +21,27 @@ jobs:
           cookie=/tmp/ft-preview-cookie.txt
           fetch_preview() {
             local path="$1" out="$2" join='?'; [[ "$path" == *'?'* ]] && join='&'
-            curl --fail --silent --show-error --location --connect-timeout 10 --max-time 40 \
-              --cookie "$cookie" --cookie-jar "$cookie" -A 'Mozilla/5.0 FabricTradPreviewVerifier/3.5' \
+            curl --fail --silent --show-error --location --connect-timeout 10 --max-time 45 \
+              --cookie "$cookie" --cookie-jar "$cookie" -A 'Mozilla/5.0 FabricTradPreviewVerifier/4.0' \
               "https://www.fabrictrad.com${path}${join}preview_theme_id=${THEME_ID}&pb=0&ft_verify=${GITHUB_RUN_ID}" -o "$out"
+            test "$(wc -c < "$out")" -gt 1000
           }
+          fetch_preview '/' /tmp/home.html
           fetch_preview '/pages/login' /tmp/login.html
           fetch_preview '/pages/register' /tmp/register.html
           fetch_preview '/pages/buyer-registration?type=end_user' /tmp/buyer-reg.html
+          fetch_preview '/pages/buyer-registration?type=retail_store' /tmp/retail-reg.html
           fetch_preview '/pages/seller-registration' /tmp/seller-reg.html
           fetch_preview '/pages/buyer-dashboard' /tmp/buyer.html
           fetch_preview '/pages/seller-portal' /tmp/seller.html
+          fetch_preview '/pages/fabrictrad-admin' /tmp/admin.html
+          fetch_preview '/products/farma-set' /tmp/product.html
+          fetch_preview '/collections/fabrictrad-catalogue' /tmp/catalogue.html
+          fetch_preview '/search?q=linen' /tmp/search.html
+          fetch_preview '/cart' /tmp/cart.html
           mkdir -p /tmp/fabrictrad-preview
           cp /tmp/*.html /tmp/fabrictrad-preview/
+          for f in /tmp/fabrictrad-preview/*.html; do echo "$(basename "$f"): $(wc -c < "$f") bytes"; done
 
       - name: Upload rendered preview HTML
         uses: actions/upload-artifact@v4
@@ -41,56 +50,149 @@ jobs:
           path: /tmp/fabrictrad-preview
           retention-days: 1
 
-      - name: Verify generic account login
+      - name: Verify public landing experience
+        shell: bash
         run: |
+          set -euo pipefail
+          grep -q 'One FabricTrad account. Three purpose-built workspaces' /tmp/home.html
+          grep -q '>Platform<' /tmp/home.html
+          grep -q '>Capabilities<' /tmp/home.html
+          grep -q 'How To Use' /tmp/home.html
+          grep -q '>Trust<' /tmp/home.html
+          grep -q 'Virtual Drape' /tmp/home.html
+          grep -q '/pages/login\|customer_authentication/login' /tmp/home.html
+
+      - name: Verify account and registration model
+        shell: bash
+        run: |
+          set -euo pipefail
           grep -q '20260828-github-parity-v1' /tmp/login.html
           grep -q 'One account for textile commerce' /tmp/login.html
           grep -q 'Your account role determines where you continue' /tmp/login.html
           ! grep -q 'separate identity and separate workspace' /tmp/login.html
           ! grep -q 'Sign in as Buyer' /tmp/login.html
-
-      - name: Verify register chooser
-        run: |
           grep -q 'One account. Start with what you need today.' /tmp/register.html
           grep -q '/pages/buyer-registration?type=end_user' /tmp/register.html
           grep -q '/pages/buyer-registration?type=retail_store' /tmp/register.html
           grep -q '/pages/seller-registration' /tmp/register.html
-
-      - name: Verify Buyer registration
-        run: |
           grep -q 'Create your Personal Buyer account' /tmp/buyer-reg.html
-          grep -q 'Retail store' /tmp/buyer-reg.html
+          grep -q 'Set up your Retail Buyer account' /tmp/retail-reg.html
           grep -q 'set_current_account_phone' /tmp/buyer-reg.html
           grep -q "p_requested_role:'buyer'" /tmp/buyer-reg.html
-
-      - name: Seller registration renders original identity model
-        run: |
           grep -q 'data-ft-seller-registration' /tmp/seller-reg.html
           grep -q 'same-account Seller Registration flow' /tmp/seller-reg.html
-      - name: Seller registration uses request seller access RPC
-        run: grep -q 'request_seller_access' /tmp/seller-reg.html
-      - name: Seller registration uses account phone RPC
-        run: grep -q 'set_current_account_phone' /tmp/seller-reg.html
-      - name: Seller registration exposes resumable status
-        run: grep -q 'Seller application status' /tmp/seller-reg.html
+          grep -q 'request_seller_access' /tmp/seller-reg.html
+          grep -q 'Seller application status' /tmp/seller-reg.html
 
-      - name: Verify Buyer workspace isolation
+      - name: Verify Buyer Portal parity and isolation
+        shell: bash
         run: |
-          grep -q 'fabrictrad-buyer-dashboard' /tmp/buyer.html
+          set -euo pipefail
+          grep -q 'data-fabrictrad-buyer-dashboard' /tmp/buyer.html
+          for label in 'My Orders' 'Track Shipments' 'Wishlist' 'Company Purchasing' 'Disputes & Messages' 'Requirements Board' 'Notifications' 'Account'; do grep -q "$label" /tmp/buyer.html; done
+          grep -q 'buyer_requirements' /tmp/buyer.html
+          grep -q 'buyer_wishlist' /tmp/buyer.html
+          grep -q 'b2b_company_accounts' /tmp/buyer.html
+          grep -q 'drape_usage' /tmp/buyer.html
           grep -q "role==='seller'" /tmp/buyer.html
           ! grep -qi 'Switch to seller' /tmp/buyer.html
-          ! grep -qi 'Seller Dashboard' /tmp/buyer.html
+          ! grep -q 'seller_products' /tmp/buyer.html
           ! grep -q 'Preparing your buyer workspace' /tmp/buyer.html
 
-      - name: Verify Seller workspace isolation
+      - name: Verify Seller Centre parity and isolation
+        shell: bash
         run: |
+          set -euo pipefail
           grep -q 'fabrictrad-seller-auth-policy' /tmp/seller.html
-          grep -q 'p.can_sell' /tmp/seller.html
+          grep -q 'data-ft-seller-dashboard' /tmp/seller.html
+          for label in 'Catalogues & pricing' 'Buyer requests' 'Earnings & payouts' 'Invoices & documents' 'Shipping settings' 'Business settings'; do grep -q "$label" /tmp/seller.html; done
+          grep -q 'seller_product_variants' /tmp/seller.html
+          grep -q 'seller_settlement_entries' /tmp/seller.html
+          grep -q 'seller_shipments' /tmp/seller.html
+          grep -q 'submit_my_seller_product_for_review' /tmp/seller.html
+          grep -q 'respond_to_my_seller_order' /tmp/seller.html
+          grep -q 'replace_my_seller_registration_document' /tmp/seller.html
+          grep -q 'fabrictrad-seller-ui-policy' /tmp/seller.html
+          ! grep -q 'ftsp-login-form' /tmp/seller.html
+          ! grep -q 'ftsp-application-form' /tmp/seller.html
           ! grep -q 'fabrictrad-seller-onboarding-bridge' /tmp/seller.html
           ! grep -q 'request_seller_access' /tmp/seller.html
-          grep -q 'fabrictrad-seller-ui-policy' /tmp/seller.html
+          ! grep -qi 'Switch to buyer' /tmp/seller.html
 
-      - name: Verify Shopify origin
+      - name: Verify Admin operations parity and privileged bridges
+        shell: bash
         run: |
+          set -euo pipefail
+          grep -q 'data-fabrictrad-admin' /tmp/admin.html
+          for label in '>Home<' '>Activity<' '>Orders<' '>Products<' '>Customers<' '>Sellers<' '>Payments<' 'Returns & disputes' '>Reconciliation<' '>Fulfillment<' '>Analytics<' 'Top sellers' '>Discounts<' 'Error monitor' '>Settings<'; do grep -q "$label" /tmp/admin.html; done
+          grep -q 'marketplace-admin-data' /tmp/admin.html
+          grep -q 'marketplace-admin-action' /tmp/admin.html
+          grep -q 'admin-otp-request-shopify' /tmp/admin.html
+          grep -q 'shopify-order-sync' /tmp/admin.html
+          grep -q 'payment_ledger' /tmp/admin.html
+          grep -q 'discount_campaigns' /tmp/admin.html
+          grep -q 'error_logs' /tmp/admin.html
+          grep -q 'webhook_dead_letter_queue' /tmp/admin.html
+          grep -q 'marketplace-order-resolution' /tmp/admin.html
+          grep -q 'shopify-seller-partial-refund' /tmp/admin.html
+          ! grep -q 'shouldCreateUser:true' /tmp/admin.html
+
+      - name: Verify product marketplace intelligence
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'data-ft-product-context' /tmp/product.html
+          grep -q 'FabricTrad product details' /tmp/product.html
+          grep -q 'GTIN' /tmp/product.html
+          grep -q 'HSN' /tmp/product.html
+          grep -q 'Personal Buyer rules' /tmp/product.html
+          grep -q 'buyer_wishlist' /tmp/product.html
+          grep -q 'seller_product_variants' /tmp/product.html
+          grep -q 'Virtual Drape' /tmp/product.html
+          grep -q 'action="/cart/add\|/cart/add' /tmp/product.html
+
+      - name: Verify protected Shopify commerce surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in /tmp/catalogue.html /tmp/search.html /tmp/cart.html /tmp/product.html; do
+            grep -q '20260828-github-parity-v1' "$f"
+            grep -qi 'cdn.shopify.com' "$f"
+          done
+          grep -qi 'fabrictrad' /tmp/catalogue.html
+          grep -qi 'linen' /tmp/search.html
+          grep -qi 'cart' /tmp/cart.html
+
+      - name: Parse FabricTrad inline JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const files = ['/tmp/login.html','/tmp/register.html','/tmp/buyer-reg.html','/tmp/retail-reg.html','/tmp/seller-reg.html','/tmp/buyer.html','/tmp/seller.html','/tmp/admin.html','/tmp/product.html'];
+          const marker = /(FabricTradAuth|ftbp|ftsr|ftlogin|ftbr|data-ft-seller|\bfts__|ftadmin|ftpctx|ftkyc|ftaor|ft-refund-review)/;
+          let checked = 0;
+          for (const file of files) {
+            const html = fs.readFileSync(file, 'utf8');
+            const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+            let match;
+            while ((match = re.exec(html))) {
+              const code = match[1].trim();
+              if (!code || !marker.test(code)) continue;
+              try { new Function(code); checked++; }
+              catch (err) { console.error(`JavaScript parse failure in ${file}: ${err.message}`); process.exit(1); }
+            }
+          }
+          if (checked < 8) { console.error(`Expected at least 8 FabricTrad inline scripts, parsed ${checked}`); process.exit(1); }
+          console.log(`Parsed ${checked} FabricTrad inline scripts successfully.`);
+          NODE
+
+      - name: Verify Shopify origin and release candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -qi 'cdn.shopify.com' /tmp/home.html
           grep -qi 'cdn.shopify.com' /tmp/buyer.html
-          echo 'PASS: Shopify candidate follows the original FabricTrad route/account model.'
+          grep -qi 'cdn.shopify.com' /tmp/seller.html
+          grep -qi 'cdn.shopify.com' /tmp/admin.html
+          echo 'PASS: FabricTrad Shopify candidate preserves the original app account model, Buyer/Seller/Admin workspaces, product intelligence, and Shopify commerce ownership.'
