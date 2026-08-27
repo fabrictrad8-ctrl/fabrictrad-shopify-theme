@@ -1,0 +1,11 @@
+{
+  "sections": {
+    "fabrictrad_home_main": {
+      "type": "fabrictrad-home",
+      "settings": {}
+    }
+  },
+  "order": [
+    "fabrictrad_home_main"
+  ]
+}
