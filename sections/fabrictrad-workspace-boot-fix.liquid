@@ -1,27 +1,26 @@
 <div data-ft-workspace-boot-fix hidden aria-hidden="true"></div>
 <script>
 (function(){
-  if(window.__FT_WORKSPACE_BOOT_FIX_V4__) return;
-  window.__FT_WORKSPACE_BOOT_FIX_V4__ = true;
+  if(window.__FT_WORKSPACE_BOOT_FIX_V5__)return;
+  window.__FT_WORKSPACE_BOOT_FIX_V5__=true;
 
-  const path = location.pathname;
-  const scope = path.includes('/pages/buyer-dashboard') ? 'buyer' : path.includes('/pages/seller-portal') ? 'seller' : null;
-  if(!scope) return;
+  const path=location.pathname;
+  const scope=path.includes('/pages/buyer-dashboard')?'buyer':path.includes('/pages/seller-portal')?'seller':null;
+  if(!scope)return;
 
-  const cfg = scope === 'buyer'
-    ? { loader: 'ftb-loading', workspace: '[data-ft-buyer-workspace]' }
-    : { loader: 'fts-loading', workspace: '[data-ft-seller-workspace]' };
+  const cfg=scope==='buyer'
+    ?{loader:'ftb-loading',selector:'[data-ft-buyer-workspace]'}
+    :{loader:'fts-loading',selector:'[data-ft-seller-workspace]'};
 
-  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-  const timeout = (promise, ms, message) => Promise.race([
+  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  const timeout=(promise,ms,message)=>Promise.race([
     Promise.resolve(promise),
-    new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms))
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(message)),ms))
   ]);
 
   async function waitForAuth(){
-    for(let i = 0; i < 200; i++){
-      const auth = window.FabricTradAuth;
-      if(auth && auth.ready && typeof auth.guard === 'function') return auth;
+    for(let i=0;i<180;i++){
+      if(window.FabricTradAuth&&typeof window.FabricTradAuth.guard==='function')return window.FabricTradAuth;
       await sleep(50);
     }
     throw new Error('FabricTrad authentication did not initialise.');
@@ -29,63 +28,67 @@
 
   function nodes(){
     return {
-      loader: document.getElementById(cfg.loader),
-      workspace: document.querySelector(cfg.workspace)
+      loader:document.getElementById(cfg.loader),
+      workspace:document.querySelector(cfg.selector)
     };
   }
 
   function reveal(){
-    const n = nodes();
-    if(n.loader) n.loader.hidden = true;
+    const n=nodes();
+    if(n.loader)n.loader.hidden=true;
     if(n.workspace){
-      n.workspace.hidden = false;
+      n.workspace.hidden=false;
       n.workspace.removeAttribute('aria-hidden');
     }
-    document.body && document.body.classList.add('ft-workspace-authorized');
+    document.documentElement.classList.remove('ft-auth-pending');
+    document.body?.classList.add('ft-workspace-authorized');
     return !!n.workspace;
   }
 
+  async function waitAndReveal(){
+    const start=Date.now();
+    while(Date.now()-start<10000){
+      if(reveal())return true;
+      await sleep(50);
+    }
+    return reveal();
+  }
+
+  function keepVisible(){
+    let ticks=0;
+    const timer=setInterval(()=>{
+      ticks++;
+      reveal();
+      if(ticks>=120)clearInterval(timer);
+    },250);
+  }
+
   function showFailure(error){
-    const n = nodes();
-    if(!n.loader) return;
-    n.loader.hidden = false;
-    n.loader.innerHTML = '<div style="max-width:520px;padding:28px;text-align:center"><strong style="display:block;color:#991b1b;margin-bottom:8px">Workspace could not finish loading.</strong><span style="color:#667085;font-size:13px">'+String(error && error.message || 'Please refresh and try again.')+'</span><br><button type="button" onclick="location.reload()" style="margin-top:14px;padding:10px 14px;border:1px solid #d0d5dd;border-radius:9px;background:#fff;cursor:pointer">Retry</button></div>';
+    const n=nodes();
+    if(!n.loader)return;
+    n.loader.hidden=false;
+    n.loader.innerHTML='<div style="max-width:540px;padding:28px;text-align:center"><strong style="display:block;color:#991b1b;margin-bottom:8px">Workspace could not finish loading.</strong><span style="color:#667085;font-size:13px">'+String(error?.message||'Please refresh and try again.')+'</span><br><button type="button" onclick="location.reload()" style="margin-top:14px;padding:10px 14px;border:1px solid #d0d5dd;border-radius:9px;background:#fff;cursor:pointer">Retry</button></div>';
+    document.documentElement.classList.remove('ft-auth-pending');
   }
 
   async function run(){
-    const auth = await waitForAuth();
+    const auth=await waitForAuth();
+    const profile=await timeout(auth.ready||auth.guard(scope),15000,'Account verification timed out.');
+    if(!profile)return;
 
-    if(!auth.__ftWorkspaceGuardDeduped){
-      const originalGuard = auth.guard.bind(auth);
-      auth.guard = function(requestedScope){
-        if(requestedScope === scope && auth.ready) return Promise.resolve(auth.ready);
-        return originalGuard(requestedScope);
-      };
-      auth.__ftWorkspaceGuardDeduped = true;
+    if(scope==='buyer'&&profile.can_buy!==true)return;
+    if(scope==='seller'&&profile.can_sell!==true){
+      if(new URLSearchParams(location.search).get('onboarding')!=='1')return;
     }
 
-    const profile = await timeout(auth.ready, 15000, 'Account verification timed out.');
-    if(!profile) return;
-    if(scope === 'buyer' && profile.can_buy !== true) return;
-    if(scope === 'seller' && profile.can_sell !== true) return;
+    await waitAndReveal();
+    keepVisible();
 
-    const started = Date.now();
-    while(Date.now() - started < 8000){
-      if(reveal()) break;
-      await sleep(50);
-    }
-
-    reveal();
-    let ticks = 0;
-    const keepVisible = setInterval(function(){
-      ticks += 1;
-      reveal();
-      if(ticks >= 80) clearInterval(keepVisible);
-    }, 250);
+    window.dispatchEvent(new CustomEvent('fabrictrad:workspace-authorized',{detail:{scope,profile}}));
   }
 
-  run().catch(function(error){
-    console.error('FabricTrad workspace boot fix failed', error);
+  run().catch(error=>{
+    console.error('FabricTrad workspace boot fix failed',error);
     showFailure(error);
   });
 })();
