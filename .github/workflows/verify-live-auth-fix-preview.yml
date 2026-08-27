@@ -3,12 +3,10 @@ name: Verify FabricTrad GitHub parity preview
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/verify-live-auth-fix-preview.yml'
+    paths: ['.github/workflows/verify-live-auth-fix-preview.yml']
   workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: { contents: read }
 
 jobs:
   verify:
@@ -17,21 +15,15 @@ jobs:
     steps:
       - name: Fetch Shopify preview pages
         shell: bash
-        env:
-          THEME_ID: '163775742170'
+        env: { THEME_ID: '163775742170' }
         run: |
           set -euo pipefail
           cookie=/tmp/ft-preview-cookie.txt
           fetch_preview() {
-            local path="$1" out="$2"
-            local join='?'
-            [[ "$path" == *'?'* ]] && join='&'
-            curl --fail --silent --show-error --location \
-              --connect-timeout 10 --max-time 40 \
-              --cookie "$cookie" --cookie-jar "$cookie" \
-              -A 'Mozilla/5.0 FabricTradPreviewVerifier/3.1' \
-              "https://www.fabrictrad.com${path}${join}preview_theme_id=${THEME_ID}&pb=0&ft_verify=${GITHUB_RUN_ID}" \
-              -o "$out"
+            local path="$1" out="$2" join='?'; [[ "$path" == *'?'* ]] && join='&'
+            curl --fail --silent --show-error --location --connect-timeout 10 --max-time 40 \
+              --cookie "$cookie" --cookie-jar "$cookie" -A 'Mozilla/5.0 FabricTradPreviewVerifier/3.2' \
+              "https://www.fabrictrad.com${path}${join}preview_theme_id=${THEME_ID}&pb=0&ft_verify=${GITHUB_RUN_ID}" -o "$out"
           }
           fetch_preview '/pages/login' /tmp/login.html
           fetch_preview '/pages/register' /tmp/register.html
@@ -39,12 +31,9 @@ jobs:
           fetch_preview '/pages/seller-registration' /tmp/seller-reg.html
           fetch_preview '/pages/buyer-dashboard' /tmp/buyer.html
           fetch_preview '/pages/seller-portal' /tmp/seller.html
-          for f in login register buyer-reg seller-reg buyer seller; do echo "$f bytes: $(wc -c < /tmp/$f.html)"; done
 
       - name: Verify generic account login
-        shell: bash
         run: |
-          set -euo pipefail
           grep -q '20260828-github-parity-v1' /tmp/login.html
           grep -q 'One account for textile commerce' /tmp/login.html
           grep -q 'Your account role determines where you continue' /tmp/login.html
@@ -52,36 +41,30 @@ jobs:
           ! grep -q 'Sign in as Buyer' /tmp/login.html
 
       - name: Verify register chooser
-        shell: bash
         run: |
-          set -euo pipefail
           grep -q 'One account. Start with what you need today.' /tmp/register.html
           grep -q '/pages/buyer-registration?type=end_user' /tmp/register.html
           grep -q '/pages/buyer-registration?type=retail_store' /tmp/register.html
           grep -q '/pages/seller-registration' /tmp/register.html
 
       - name: Verify Buyer registration
-        shell: bash
         run: |
-          set -euo pipefail
           grep -q 'Create your Personal Buyer account' /tmp/buyer-reg.html
           grep -q 'Retail store' /tmp/buyer-reg.html
           grep -q 'set_current_account_phone' /tmp/buyer-reg.html
           grep -q "p_requested_role:'buyer'" /tmp/buyer-reg.html
 
-      - name: Verify Seller registration
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -q 'same FabricTrad identity' /tmp/seller-reg.html
-          grep -q 'request_seller_access' /tmp/seller-reg.html
-          grep -q 'set_current_account_phone' /tmp/seller-reg.html
-          grep -q 'Seller application status' /tmp/seller-reg.html
+      - name: Seller registration renders original identity model
+        run: grep -q 'same FabricTrad identity' /tmp/seller-reg.html
+      - name: Seller registration uses request seller access RPC
+        run: grep -q 'request_seller_access' /tmp/seller-reg.html
+      - name: Seller registration uses account phone RPC
+        run: grep -q 'set_current_account_phone' /tmp/seller-reg.html
+      - name: Seller registration exposes resumable status
+        run: grep -q 'Seller application status' /tmp/seller-reg.html
 
       - name: Verify Buyer workspace isolation
-        shell: bash
         run: |
-          set -euo pipefail
           grep -q 'fabrictrad-buyer-dashboard' /tmp/buyer.html
           grep -q "role==='seller'" /tmp/buyer.html
           ! grep -qi 'Switch to seller' /tmp/buyer.html
@@ -89,9 +72,7 @@ jobs:
           ! grep -q 'Preparing your buyer workspace' /tmp/buyer.html
 
       - name: Verify Seller workspace isolation
-        shell: bash
         run: |
-          set -euo pipefail
           grep -q 'fabrictrad-seller-auth-policy' /tmp/seller.html
           grep -q 'p.can_sell' /tmp/seller.html
           ! grep -q 'fabrictrad-seller-onboarding-bridge' /tmp/seller.html
@@ -99,8 +80,6 @@ jobs:
           grep -q 'fabrictrad-seller-ui-policy' /tmp/seller.html
 
       - name: Verify Shopify origin
-        shell: bash
         run: |
-          set -euo pipefail
           grep -qi 'cdn.shopify.com' /tmp/buyer.html
           echo 'PASS: Shopify candidate follows the original FabricTrad route/account model.'
