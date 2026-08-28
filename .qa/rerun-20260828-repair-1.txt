@@ -1,0 +1,1 @@
+Re-run browser QA against unpublished Shopify theme 163783311578 after auth, checkout authorization, cart, logo, login, registration, and overflow repairs.
