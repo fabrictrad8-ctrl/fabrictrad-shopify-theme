@@ -1,0 +1,76 @@
+name: Storefront access-control QA
+
+on:
+  push:
+    branches: [exact-original-reference-20260828]
+    paths: ['.github/workflows/qa-public-gate.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  raw-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE: https://www.fabrictrad.com
+      THEME: '163783311578'
+    steps:
+      - name: Inspect raw unauthenticated protected HTML
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p qa-gate
+          declare -A paths=(
+            [catalogue]='/collections/fabrictrad-catalogue'
+            [product]='/products/farma-set'
+            [search]='/search?q=linen'
+            [cart]='/cart'
+            [buyer]='/pages/buyer-dashboard'
+            [seller]='/pages/seller-portal'
+            [admin]='/pages/fabrictrad-admin'
+          )
+          printf 'route\tstatus\tbytes\tcontains_protected_marker\n' > qa-gate/raw-gate.tsv
+          for name in "${!paths[@]}"; do
+            p="${paths[$name]}"
+            sep='?'; [[ "$p" == *'?'* ]] && sep='&'
+            url="${BASE}${p}${sep}preview_theme_id=${THEME}"
+            code=$(curl -sS -L --max-time 45 -A 'FabricTrad-QA/1.0' -o "qa-gate/${name}.html" -w '%{http_code}' "$url" || true)
+            bytes=$(wc -c < "qa-gate/${name}.html" 2>/dev/null || echo 0)
+            marker='no'
+            case "$name" in
+              catalogue) grep -qiE 'Farma set|Linen fabric quality|FabricTrad Catalogue' "qa-gate/${name}.html" && marker='yes' || true ;;
+              product) grep -qiE 'Farma set|Add to cart|Product summary' "qa-gate/${name}.html" && marker='yes' || true ;;
+              search) grep -qiE 'Linen fabric quality|Search results' "qa-gate/${name}.html" && marker='yes' || true ;;
+              buyer) grep -qiE 'Buyer workspace|Buyer Portal|My Orders' "qa-gate/${name}.html" && marker='yes' || true ;;
+              seller) grep -qiE 'Seller Centre|Add product|Earnings & payouts' "qa-gate/${name}.html" && marker='yes' || true ;;
+              admin) grep -qiE 'FabricTrad Admin|Seller rejection refunds|Administrator sign in' "qa-gate/${name}.html" && marker='yes' || true ;;
+              cart) grep -qiE 'Cart|You may also like' "qa-gate/${name}.html" && marker='yes' || true ;;
+            esac
+            printf '%s\t%s\t%s\t%s\n' "$name" "$code" "$bytes" "$marker" >> qa-gate/raw-gate.tsv
+          done
+          cat qa-gate/raw-gate.tsv
+
+      - name: Security interpretation
+        run: |
+          python - <<'PY'
+          import csv,json
+          rows=list(csv.DictReader(open('qa-gate/raw-gate.tsv'),delimiter='\t'))
+          protected_content=[r['route'] for r in rows if r['contains_protected_marker']=='yes' and r['route'] in {'catalogue','product','search','buyer','seller'}]
+          result={
+            'rows':rows,
+            'serverSideProtectionPass':len(protected_content)==0,
+            'protectedContentPresentInRawUnauthenticatedHtml':protected_content,
+            'note':'A client-side JavaScript redirect is not an authorization boundary if protected content is already present in raw HTML.'
+          }
+          open('qa-gate/summary.json','w').write(json.dumps(result,indent=2))
+          print(json.dumps(result,indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fabrictrad-public-gate-qa
+          path: qa-gate
+          retention-days: 5
