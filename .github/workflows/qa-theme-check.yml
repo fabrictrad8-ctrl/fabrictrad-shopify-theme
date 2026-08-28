@@ -1,0 +1,41 @@
+name: Shopify Theme Check QA
+
+on:
+  push:
+    branches: [exact-original-reference-20260828]
+    paths: ['.github/workflows/qa-theme-check.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  theme-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Shopify Theme Check
+        run: |
+          npx --yes @shopify/cli@latest theme check --path . --output json > theme-check.json || true
+          cat theme-check.json
+          python - <<'PY'
+          import json,sys
+          p='theme-check.json'
+          try:
+              data=json.load(open(p))
+          except Exception as e:
+              print('Could not parse theme-check JSON:',e)
+              sys.exit(2)
+          # Shopify CLI output can be either a list or object depending on version.
+          print('Theme Check JSON parsed successfully.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fabrictrad-theme-check
+          path: theme-check.json
+          retention-days: 5
