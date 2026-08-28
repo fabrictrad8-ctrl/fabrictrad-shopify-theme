@@ -1,0 +1,195 @@
+name: Verify FabricTrad Aug 26 Shopify restore
+
+on:
+  push:
+    branches: [aug26-shopify-restore-20260828]
+    paths: ['.github/workflows/verify-aug26-shopify-restore.yml']
+  workflow_dispatch:
+
+permissions: { contents: read }
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Fetch Shopify restore preview surfaces
+        shell: bash
+        env:
+          THEME_ID: '163782852826'
+        run: |
+          set -euo pipefail
+          cookie=/tmp/ft-aug26-preview-cookie.txt
+          fetch_preview() {
+            local path="$1" out="$2" join='?'; [[ "$path" == *'?'* ]] && join='&'
+            curl --fail --silent --show-error --location --connect-timeout 10 --max-time 45 \
+              --cookie "$cookie" --cookie-jar "$cookie" -A 'Mozilla/5.0 FabricTradAug26Verifier/1.0' \
+              "https://www.fabrictrad.com${path}${join}preview_theme_id=${THEME_ID}&pb=0&ft_verify=${GITHUB_RUN_ID}" -o "$out"
+            test "$(wc -c < "$out")" -gt 1000
+          }
+          fetch_preview '/' /tmp/home.html
+          fetch_preview '/pages/how-to-use?role=buyer' /tmp/howto.html
+          fetch_preview '/pages/login' /tmp/login.html
+          fetch_preview '/pages/register' /tmp/register.html
+          fetch_preview '/pages/buyer-registration?type=end_user' /tmp/buyer-reg.html
+          fetch_preview '/pages/seller-registration' /tmp/seller-reg.html
+          fetch_preview '/pages/buyer-dashboard' /tmp/buyer.html
+          fetch_preview '/pages/seller-portal' /tmp/seller.html
+          fetch_preview '/pages/fabrictrad-admin' /tmp/admin.html
+          fetch_preview '/collections/fabrictrad-catalogue' /tmp/catalogue.html
+          fetch_preview '/products/farma-set' /tmp/product.html
+          fetch_preview '/search?q=linen' /tmp/search.html
+          fetch_preview '/cart' /tmp/cart.html
+          mkdir -p /tmp/fabrictrad-aug26-preview
+          cp /tmp/{home,howto,login,register,buyer-reg,seller-reg,buyer,seller,admin,catalogue,product,search,cart}.html /tmp/fabrictrad-aug26-preview/
+          for f in /tmp/fabrictrad-aug26-preview/*.html; do echo "$(basename "$f"): $(wc -c < "$f") bytes"; done
+
+      - name: Upload preview HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabrictrad-aug26-shopify-preview
+          path: /tmp/fabrictrad-aug26-preview
+          retention-days: 1
+
+      - name: Verify Aug 26 public interface
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'ft-aug26-public' /tmp/home.html
+          grep -q 'Textile trade,' /tmp/home.html
+          grep -q 'rebuilt for now' /tmp/home.html
+          grep -q "India's textile commerce operating layer" /tmp/home.html
+          grep -q 'One platform, two focused workspaces' /tmp/home.html
+          grep -q 'Buyer marketplace' /tmp/home.html
+          grep -q 'Seller operations' /tmp/home.html
+          grep -q 'AI Virtual Drape' /tmp/home.html
+          grep -q 'Private commerce, public guidance' /tmp/home.html
+          grep -q '/pages/login' /tmp/home.html
+          grep -q '/pages/register' /tmp/home.html
+          grep -q '/pages/how-to-use?role=buyer' /tmp/home.html
+          ! grep -q 'href="/collections/' /tmp/home.html
+          ! grep -q 'href="/products/' /tmp/home.html
+          ! grep -q 'action="/search"' /tmp/home.html
+          ! grep -q 'href="/cart"' /tmp/home.html
+
+      - name: Verify public walkthrough and registration routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'How FabricTrad works' /tmp/howto.html
+          grep -q 'I want to buy' /tmp/howto.html
+          grep -q 'I want to sell' /tmp/howto.html
+          grep -q 'Marketplace browsing is intentionally restricted to active Buyer accounts' /tmp/howto.html
+          grep -q 'Once the primary role is Seller' /tmp/howto.html
+          grep -q 'One account for textile commerce' /tmp/login.html
+          ! grep -q 'Sign in as Buyer' /tmp/login.html
+          ! grep -q 'Sign in as Seller' /tmp/login.html
+          grep -q 'One account. Start with what you need today.' /tmp/register.html
+          grep -q '/pages/buyer-registration?type=end_user' /tmp/register.html
+          grep -q '/pages/buyer-registration?type=retail_store' /tmp/register.html
+          grep -q '/pages/seller-registration' /tmp/register.html
+          grep -q 'Create your Personal Buyer account' /tmp/buyer-reg.html
+          grep -q 'request_seller_access' /tmp/seller-reg.html
+
+      - name: Verify role-owned workspaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'data-fabrictrad-buyer-dashboard' /tmp/buyer.html
+          for label in 'My Orders' 'Track Shipments' 'Wishlist' 'Company Purchasing' 'Disputes & Messages' 'Requirements Board' 'Notifications' 'Account'; do grep -q "$label" /tmp/buyer.html; done
+          ! grep -qi 'Switch to seller' /tmp/buyer.html
+          ! grep -q 'seller_products' /tmp/buyer.html
+          ! grep -q 'Preparing your buyer workspace' /tmp/buyer.html
+          grep -q 'data-ft-seller-dashboard' /tmp/seller.html
+          for label in 'Catalogues & pricing' 'Buyer requests' 'Earnings & payouts' 'Invoices & documents' 'Shipping settings' 'Business settings'; do grep -q "$label" /tmp/seller.html; done
+          ! grep -q 'ftsp-login-form' /tmp/seller.html
+          ! grep -q 'ftsp-application-form' /tmp/seller.html
+          ! grep -q 'fabrictrad-seller-onboarding-bridge' /tmp/seller.html
+          ! grep -qi '>Switch to buyer<' /tmp/seller.html
+          ! grep -q 'href="/pages/buyer-dashboard"' /tmp/seller.html
+          grep -q 'data-fabrictrad-admin' /tmp/admin.html
+          grep -q 'marketplace-admin-action' /tmp/admin.html
+
+      - name: Verify Shopify commerce is Buyer-gated
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in /tmp/catalogue.html /tmp/product.html /tmp/search.html /tmp/cart.html; do
+            grep -q '20260828-aug26-shopify-restore-v1' "$f"
+            grep -q 'requireBuyer' "$f"
+            grep -qi 'cdn.shopify.com' "$f"
+          done
+          grep -q 'data-ft-aug26-buyer-bar' /tmp/catalogue.html
+          grep -q 'Search fabrics, colours, GSM, vendors or SKU' /tmp/catalogue.html
+          grep -q '>Marketplace<' /tmp/catalogue.html
+          grep -q '>Requirements<' /tmp/catalogue.html
+          grep -q '>Orders<' /tmp/catalogue.html
+          grep -q '>Wishlist<' /tmp/catalogue.html
+          ! grep -qi 'Seller workspace' /tmp/catalogue.html
+
+      - name: Parse FabricTrad inline JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const files = ['/tmp/home.html','/tmp/howto.html','/tmp/login.html','/tmp/register.html','/tmp/buyer-reg.html','/tmp/seller-reg.html','/tmp/buyer.html','/tmp/seller.html','/tmp/admin.html','/tmp/catalogue.html','/tmp/product.html'];
+          const marker = /(FabricTradAuth|ft-guide|ft-aug26|ftlogin|ftbr|ftsr|data-ft-seller|ftadmin|ftpctx)/;
+          let checked = 0;
+          for (const file of files) {
+            const html = fs.readFileSync(file, 'utf8');
+            const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+            let match;
+            while ((match = re.exec(html))) {
+              const code = match[1].trim();
+              if (!code || !marker.test(code)) continue;
+              try { new Function(code); checked++; }
+              catch (err) { console.error(`JavaScript parse failure in ${file}: ${err.message}`); process.exit(1); }
+            }
+          }
+          if (checked < 9) { console.error(`Expected at least 9 FabricTrad inline scripts, parsed ${checked}`); process.exit(1); }
+          console.log(`Parsed ${checked} FabricTrad inline scripts successfully.`);
+          NODE
+
+      - name: Browser-test guest access boundaries
+        shell: bash
+        env:
+          THEME_ID: '163782852826'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ft-browser && cd /tmp/ft-browser
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.55.0
+          npx playwright install --with-deps chromium >/dev/null
+          node <<'NODE'
+          const { chromium } = require('playwright');
+          const theme = process.env.THEME_ID;
+          const base = 'https://www.fabrictrad.com';
+          const preview = (path) => `${base}${path}${path.includes('?') ? '&' : '?'}preview_theme_id=${theme}&pb=0&ft_browser=${Date.now()}`;
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const ctx = await browser.newContext();
+            const page = await ctx.newPage();
+            await page.goto(preview('/'), { waitUntil: 'domcontentloaded', timeout: 45000 });
+            await page.getByText('Textile trade,', { exact: false }).waitFor({ timeout: 15000 });
+            if (!page.url().startsWith(base + '/')) throw new Error('Homepage did not remain on Shopify domain.');
+            await page.goto(preview('/pages/how-to-use?role=buyer'), { waitUntil: 'domcontentloaded', timeout: 45000 });
+            await page.getByText('I want to buy', { exact: true }).waitFor({ timeout: 15000 });
+            for (const path of ['/collections/fabrictrad-catalogue','/products/farma-set','/search?q=linen','/cart']) {
+              await page.goto(preview(path), { waitUntil: 'domcontentloaded', timeout: 45000 });
+              await page.waitForURL(url => url.pathname === '/pages/login', { timeout: 25000 });
+              if (new URL(page.url()).pathname !== '/pages/login') throw new Error(`Guest was not redirected from ${path}`);
+            }
+            await browser.close();
+            console.log('PASS: guest catalogue, product, search and cart routes redirect to FabricTrad login.');
+          })().catch(err => { console.error(err); process.exit(1); });
+          NODE
+
+      - name: Confirm Shopify origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -qi 'cdn.shopify.com' /tmp/home.html
+          grep -qi 'cdn.shopify.com' /tmp/buyer.html
+          grep -qi 'cdn.shopify.com' /tmp/seller.html
+          echo 'PASS: Aug-26 FabricTrad experience is running as an unpublished Shopify theme candidate.'
