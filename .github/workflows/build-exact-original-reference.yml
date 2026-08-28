@@ -1,0 +1,129 @@
+name: Build exact Aug 26 FabricTrad reference
+
+on:
+  push:
+    branches: [exact-original-reference-20260828]
+    paths: ['.github/workflows/build-exact-original-reference.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact historical FabricTrad source
+        uses: actions/checkout@v4
+        with:
+          repository: fabrictrad8-ctrl/fabrictrad
+          ref: 658e8248619aadf208cdb7f007826b57a43406f6
+          path: original
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: original/package-lock.json
+
+      - name: Install historical dependencies
+        working-directory: original
+        run: npm ci
+
+      - name: Compile exact Tailwind output and CSS import stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reference/screenshots
+          cd original
+          npx tailwindcss -i src/styles/tailwind.css -o ../reference/00-tailwind-compiled.css --minify
+          cd ..
+          cp reference/00-tailwind-compiled.css reference/fabrictrad-original-bundle.css
+          for file in \
+            font-fallback.css \
+            shopify-glass.css \
+            commerce-polish.css \
+            global-commerce.css \
+            orange-commerce.css \
+            premium-commerce.css \
+            marketplace-refinement.css \
+            header-reflow.css \
+            site-motion-and-polish.css \
+            accessibility-target-fixes.css \
+            commerce-2026-redesign.css \
+            fabrictrad-future.css \
+            fabrictrad-ui-fixes.css \
+            fabrictrad-light-commerce.css \
+            commerce-ux-final.css \
+            human-ui-refinement.css \
+            public-nav-consistency.css; do
+              printf '\n/* ===== %s ===== */\n' "$file" >> reference/fabrictrad-original-bundle.css
+              cat "original/src/styles/$file" >> reference/fabrictrad-original-bundle.css
+          done
+          base64 -w0 original/public/assets/images/app_logo.png > reference/app_logo.base64
+          base64 -w0 original/public/assets/images/no_image.png > reference/no_image.base64
+          sha256sum original/public/assets/images/app_logo.png original/public/assets/images/no_image.png reference/fabrictrad-original-bundle.css > reference/SHA256SUMS.txt
+          wc -c reference/* || true
+
+      - name: Install Chromium for reference screenshots
+        working-directory: original
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact historical app
+        working-directory: original
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://rdhfwlzhcvwjhkxhhpoo.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Un2-RQfjGbIiXF3Mb2oGIA_p-Z1kMls
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_Un2-RQfjGbIiXF3Mb2oGIA_p-Z1kMls
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+        run: |
+          npm run dev > /tmp/fabrictrad-reference.log 2>&1 &
+          echo $! > /tmp/fabrictrad-reference.pid
+          for i in {1..90}; do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/fabrictrad-reference.log
+          exit 1
+
+      - name: Capture original desktop and mobile references
+        working-directory: original
+        env:
+          HOME_SCREENSHOT_DIR: ../reference/screenshots
+        run: |
+          cat > /tmp/capture-reference.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+          const out = process.env.HOME_SCREENSHOT_DIR;
+          fs.mkdirSync(out, { recursive: true });
+          const browser = await chromium.launch({ headless: true });
+          const pages = [
+            ['home','/'],
+            ['login','/login'],
+            ['register','/register'],
+            ['seller-registration','/seller-registration']
+          ];
+          for (const [name,path] of pages) {
+            for (const [device,width,height] of [['desktop',1440,1000],['mobile',390,844]]) {
+              const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
+              await page.goto('http://127.0.0.1:3000'+path,{waitUntil:'networkidle',timeout:60000});
+              await page.screenshot({path:`${out}/${name}-${device}.png`,fullPage:true});
+              await page.close();
+            }
+          }
+          await browser.close();
+          NODE
+          node /tmp/capture-reference.mjs
+
+      - name: Save app log
+        if: always()
+        run: cp /tmp/fabrictrad-reference.log reference/reference-app.log 2>/dev/null || true
+
+      - name: Upload exact reference bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabrictrad-aug26-exact-reference
+          path: reference
+          retention-days: 3
