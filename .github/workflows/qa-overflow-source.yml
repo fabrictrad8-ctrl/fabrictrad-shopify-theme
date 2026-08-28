@@ -1,0 +1,54 @@
+name: Diagnose exact-port viewport overflow
+
+on:
+  push:
+    branches: [exact-original-reference-20260828]
+    paths: ['.github/workflows/qa-overflow-source.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE: https://www.fabrictrad.com
+      THEME: '163783311578'
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+      - name: Diagnose
+        run: |
+          cat > diag.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          const browser=await chromium.launch({headless:true});
+          for (const [device,width,height] of [['desktop',1440,1000],['mobile',390,844]]) {
+            const ctx=await browser.newContext({viewport:{width,height}});
+            const p=await ctx.newPage();
+            await p.goto(`${process.env.BASE}/?preview_theme_id=${process.env.THEME}`,{waitUntil:'domcontentloaded',timeout:60000});
+            await p.waitForTimeout(2000);
+            const info=await p.evaluate(()=>{
+              const vw=document.documentElement.clientWidth;
+              const sw=document.documentElement.scrollWidth;
+              const els=[...document.querySelectorAll('*')].map((el)=>{
+                const r=el.getBoundingClientRect();
+                const cs=getComputedStyle(el);
+                return {tag:el.tagName,id:el.id||'',cls:(typeof el.className==='string'?el.className:'').slice(0,180),left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),display:cs.display,position:cs.position,visibility:cs.visibility,overflowX:cs.overflowX};
+              }).filter(x=>x.display!=='none' && x.visibility!=='hidden' && (x.right>vw+2 || x.left<-2 || x.width>vw+2)).sort((a,b)=>Math.max(b.right-vw,b.width-vw)-Math.max(a.right-vw,a.width-vw)).slice(0,30);
+              return {vw,sw,overflow:sw-vw,elements:els};
+            });
+            console.log(`=== ${device} ===`);
+            console.log(JSON.stringify(info,null,2));
+            await ctx.close();
+          }
+          await browser.close();
+          NODE
+          node diag.mjs
