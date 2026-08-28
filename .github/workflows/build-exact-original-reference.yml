@@ -28,7 +28,7 @@ jobs:
 
       - name: Install historical dependencies
         working-directory: original
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Compile exact Tailwind output and CSS import stack
         shell: bash
