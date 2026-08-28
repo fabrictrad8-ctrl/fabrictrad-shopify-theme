@@ -1,0 +1,283 @@
+name: QA unpublished FabricTrad exact port
+
+on:
+  push:
+    branches: [exact-original-reference-20260828]
+    paths: ['.github/workflows/qa-exact-port-preview.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  storefront-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASE_URL: https://www.fabrictrad.com
+      PREVIEW_THEME_ID: '163783311578'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install QA runtime
+        run: |
+          mkdir -p qa-runtime qa-output/screenshots
+          cd qa-runtime
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright
+          npx playwright install --with-deps chromium
+
+      - name: Download exact Aug 26 visual references
+        uses: actions/download-artifact@v4
+        with:
+          name: fabrictrad-aug26-exact-reference
+          path: exact-reference
+          github-token: ${{ github.token }}
+          run-id: 33144460728
+
+      - name: Run browser QA
+        working-directory: qa-runtime
+        run: |
+          cat > storefront-qa.mjs <<'NODE'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const base = process.env.BASE_URL;
+          const preview = process.env.PREVIEW_THEME_ID;
+          const outRoot = path.resolve('../qa-output');
+          const shots = path.join(outRoot, 'screenshots');
+          fs.mkdirSync(shots, { recursive: true });
+
+          const routes = [
+            {name:'home', path:'/', public:true},
+            {name:'login', path:'/pages/login', public:true},
+            {name:'register', path:'/pages/register', public:true},
+            {name:'buyer-registration', path:'/pages/buyer-registration', public:true},
+            {name:'seller-registration', path:'/pages/seller-registration', public:true},
+            {name:'how-to-use', path:'/pages/how-to-use', public:true},
+            {name:'catalogue', path:'/collections/fabrictrad-catalogue', public:false},
+            {name:'search', path:'/search?q=linen', public:false},
+            {name:'product-farma', path:'/products/farma-set', public:false},
+            {name:'cart', path:'/cart', public:false},
+            {name:'buyer-dashboard', path:'/pages/buyer-dashboard', public:false},
+            {name:'seller-portal', path:'/pages/seller-portal', public:false},
+            {name:'admin', path:'/pages/fabrictrad-admin', public:false}
+          ];
+
+          const devices = [
+            {name:'desktop', width:1440, height:1000},
+            {name:'mobile', width:390, height:844}
+          ];
+
+          const results = [];
+          const browser = await chromium.launch({headless:true});
+
+          for (const device of devices) {
+            const context = await browser.newContext({
+              viewport: {width:device.width, height:device.height},
+              deviceScaleFactor: 1,
+              ignoreHTTPSErrors: false
+            });
+
+            // Establish the Shopify theme preview cookie first.
+            const warm = await context.newPage();
+            await warm.goto(`${base}/?preview_theme_id=${preview}`, {waitUntil:'domcontentloaded', timeout:60000});
+            await warm.waitForTimeout(1500);
+            await warm.close();
+
+            for (const route of routes) {
+              const page = await context.newPage();
+              const consoleErrors = [];
+              const pageErrors = [];
+              const failedRequests = [];
+              const badResponses = [];
+              page.on('console', msg => {
+                if (msg.type() === 'error') consoleErrors.push(msg.text().slice(0,1000));
+              });
+              page.on('pageerror', err => pageErrors.push(String(err).slice(0,1000)));
+              page.on('requestfailed', req => {
+                const failure = req.failure();
+                failedRequests.push(`${req.method()} ${req.url()} :: ${failure?.errorText || 'failed'}`.slice(0,1200));
+              });
+              page.on('response', res => {
+                if (res.status() >= 400 && !['image','media','font'].includes(res.request().resourceType())) {
+                  badResponses.push(`${res.status()} ${res.url()}`.slice(0,1200));
+                }
+              });
+
+              const separator = route.path.includes('?') ? '&' : '?';
+              const url = `${base}${route.path}${separator}preview_theme_id=${preview}`;
+              let mainStatus = null;
+              let navigationError = null;
+              try {
+                const res = await page.goto(url, {waitUntil:'domcontentloaded', timeout:60000});
+                mainStatus = res?.status() ?? null;
+                await page.waitForTimeout(2000);
+              } catch (e) {
+                navigationError = String(e);
+              }
+
+              const finalUrl = page.url();
+              const title = await page.title().catch(()=> '');
+              const bodyText = await page.locator('body').innerText({timeout:5000}).catch(()=> '');
+              const bodyLength = bodyText.trim().length;
+              const horizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 2).catch(()=>null);
+              const blank = bodyLength < 20;
+              const hasShopifyError = /Liquid error|There was a problem loading this website|Something went wrong/i.test(bodyText);
+              const shotPath = path.join(shots, `${route.name}-${device.name}.png`);
+              await page.screenshot({path:shotPath, fullPage:true}).catch(()=>{});
+
+              results.push({
+                route: route.name,
+                requestedUrl: url,
+                device: device.name,
+                mainStatus,
+                finalUrl,
+                title,
+                bodyLength,
+                bodyPreview: bodyText.replace(/\s+/g,' ').slice(0,700),
+                horizontalOverflow,
+                blank,
+                hasShopifyError,
+                consoleErrors,
+                pageErrors,
+                failedRequests: [...new Set(failedRequests)].slice(0,30),
+                badResponses: [...new Set(badResponses)].slice(0,30),
+                navigationError
+              });
+              await page.close();
+            }
+
+            // Real cart flow in an isolated browser context. Variant is active and in stock.
+            const cartPage = await context.newPage();
+            const flowErrors = [];
+            cartPage.on('pageerror', e => flowErrors.push(String(e)));
+            let cartFlow = {device:device.name, addStatus:null, cartStatus:null, cartHasProduct:false, checkoutReached:false, checkoutUrl:null, errors:flowErrors};
+            try {
+              const addRes = await cartPage.goto(`${base}/cart/48507027849434:1?preview_theme_id=${preview}`, {waitUntil:'domcontentloaded', timeout:60000});
+              cartFlow.addStatus = addRes?.status() ?? null;
+              await cartPage.waitForTimeout(1800);
+              const cartText = await cartPage.locator('body').innerText();
+              cartFlow.cartHasProduct = /Farma set/i.test(cartText);
+              cartFlow.cartStatus = addRes?.status() ?? null;
+              await cartPage.screenshot({path:path.join(shots, `cart-with-item-${device.name}.png`), fullPage:true});
+              const checkoutButton = cartPage.locator('button[name="checkout"], input[name="checkout"], a[href*="checkout"]').first();
+              if (await checkoutButton.count()) {
+                await checkoutButton.click();
+                await cartPage.waitForLoadState('domcontentloaded', {timeout:60000}).catch(()=>{});
+                await cartPage.waitForTimeout(2000);
+                cartFlow.checkoutUrl = cartPage.url();
+                cartFlow.checkoutReached = /checkout|checkouts/i.test(cartFlow.checkoutUrl);
+                await cartPage.screenshot({path:path.join(shots, `checkout-reached-${device.name}.png`), fullPage:true}).catch(()=>{});
+              }
+            } catch (e) {
+              cartFlow.exception = String(e);
+            }
+            results.push({cartFlow});
+            await cartPage.close();
+            await context.close();
+          }
+
+          await browser.close();
+          fs.writeFileSync(path.join(outRoot,'browser-results.json'), JSON.stringify(results,null,2));
+
+          const pageRows = results.filter(r=>r.route);
+          const critical = pageRows.filter(r =>
+            r.navigationError || r.mainStatus === null || r.mainStatus >= 500 || r.blank || r.hasShopifyError || r.pageErrors.length > 0
+          );
+          const warnings = pageRows.filter(r => r.horizontalOverflow || r.consoleErrors.length || r.failedRequests.length || r.badResponses.length);
+          const carts = results.filter(r=>r.cartFlow).map(r=>r.cartFlow);
+          const summary = {
+            routesChecked: pageRows.length,
+            criticalCount: critical.length,
+            warningCount: warnings.length,
+            critical: critical.map(r=>({route:r.route,device:r.device,status:r.mainStatus,finalUrl:r.finalUrl,navigationError:r.navigationError,pageErrors:r.pageErrors,blank:r.blank,hasShopifyError:r.hasShopifyError})),
+            warnings: warnings.map(r=>({route:r.route,device:r.device,overflow:r.horizontalOverflow,consoleErrors:r.consoleErrors,badResponses:r.badResponses,failedRequests:r.failedRequests})),
+            cartFlows: carts
+          };
+          fs.writeFileSync(path.join(outRoot,'browser-summary.json'), JSON.stringify(summary,null,2));
+          console.log(JSON.stringify(summary,null,2));
+          NODE
+          node storefront-qa.mjs
+
+      - name: Compare exact-original vs Shopify public surfaces
+        run: |
+          python -m pip install --quiet pillow
+          cat > /tmp/compare.py <<'PY'
+          from PIL import Image, ImageStat
+          import os, json
+          pairs=[]
+          ref_root='exact-reference/screenshots'
+          cand_root='qa-output/screenshots'
+          for name in ['home','login','register','seller-registration']:
+              for device in ['desktop','mobile']:
+                  rp=os.path.join(ref_root,f'{name}-{device}.png')
+                  cp=os.path.join(cand_root,f'{name}-{device}.png')
+                  if not (os.path.exists(rp) and os.path.exists(cp)):
+                      pairs.append({'surface':name,'device':device,'error':'missing screenshot'})
+                      continue
+                  ref=Image.open(rp).convert('RGB')
+                  cand=Image.open(cp).convert('RGB')
+                  cand=cand.resize(ref.size)
+                  # Low-frequency visual difference: compare 96x96 thumbnails.
+                  a=ref.resize((96,96))
+                  b=cand.resize((96,96))
+                  import PIL.ImageChops as C
+                  d=C.difference(a,b)
+                  mean=sum(ImageStat.Stat(d).mean)/3
+                  similarity=max(0.0,100.0*(1.0-mean/255.0))
+                  pairs.append({'surface':name,'device':device,'referenceSize':ref.size,'candidateOriginalSize':Image.open(cp).size,'visualSimilarityPercent':round(similarity,2),'meanRgbDifference':round(mean,2)})
+          os.makedirs('qa-output',exist_ok=True)
+          with open('qa-output/visual-comparison.json','w') as f: json.dump(pairs,f,indent=2)
+          print(json.dumps(pairs,indent=2))
+          PY
+          python /tmp/compare.py
+
+      - name: Static route and role-policy checks
+        run: |
+          python - <<'PY'
+          import os, re, json
+          files=[
+            'sections/fabrictrad-auth-router.liquid',
+            'sections/fabrictrad-buyer-account-guard.liquid',
+            'sections/fabrictrad-seller-auth-policy.liquid',
+            'sections/fabrictrad-seller-ui-policy.liquid',
+            'sections/fabrictrad-admin-auth-policy.liquid',
+            'sections/fabrictrad-buyer-dashboard.liquid',
+            'sections/fabrictrad-seller-portal.liquid',
+            'sections/fabrictrad-admin-portal.liquid'
+          ]
+          findings=[]
+          for f in files:
+              if not os.path.exists(f):
+                  findings.append({'file':f,'exists':False})
+                  continue
+              txt=open(f,encoding='utf-8').read()
+              findings.append({
+                'file':f,'exists':True,'bytes':len(txt.encode()),
+                'hasCustomerCheck': bool(re.search(r'\bcustomer\b',txt,re.I)),
+                'hasLoginRedirect': bool(re.search(r'login|account/login',txt,re.I)),
+                'hasSellerTerms': bool(re.search(r'seller|vendor',txt,re.I)),
+                'hasAdminTerms': bool(re.search(r'admin',txt,re.I)),
+                'dangerousDocumentWrite': 'document.write' in txt,
+                'evalUsage': bool(re.search(r'\beval\s*\(',txt))
+              })
+          os.makedirs('qa-output',exist_ok=True)
+          open('qa-output/static-policy-checks.json','w').write(json.dumps(findings,indent=2))
+          print(json.dumps(findings,indent=2))
+          PY
+
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fabrictrad-exact-port-full-qa
+          path: qa-output
+          retention-days: 5
